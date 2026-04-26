@@ -50,6 +50,14 @@ export interface AnimController {
   swingDir: 1 | -1;
 }
 
+export interface PlayerProgress {
+  classId: string;
+  learned: Set<string>;
+  skillPoints: number;
+  /** active timed buffs (id -> {until, mult, type}) */
+  buffs: Record<string, { until: number; data: Record<string, number> }>;
+}
+
 export interface Entity {
   id: string;
   kind: EntityKind;
@@ -70,6 +78,7 @@ export interface Entity {
   rig?: EntityRig;
   anim?: AnimController;
   bobTime?: number;
+  progress?: PlayerProgress;
 }
 
 export interface AIState {

@@ -1,8 +1,10 @@
 import * as THREE from "three";
 import {
   makeGrassTexture,
-  makeStoneTexture,
+  makeStoneTextureSet,
   makeBarkTexture,
+  makeCobblestoneTexture,
+  makeMarbleTexture,
 } from "./textures";
 
 export const WORLD_SIZE = 200;
@@ -15,8 +17,11 @@ export interface World {
   sun: THREE.DirectionalLight;
 }
 
-const SHARED_BARK = makeBarkTexture(256);
-const SHARED_STONE = makeStoneTexture(512);
+const SHARED_BARK = makeBarkTexture(512);
+const SHARED_STONE_SET = makeStoneTextureSet(1024);
+const SHARED_STONE = SHARED_STONE_SET.map;
+const SHARED_STONE_NRM = SHARED_STONE_SET.normalMap;
+const SHARED_MARBLE = makeMarbleTexture(512);
 
 function buildTree(rng: () => number): THREE.Group {
   const group = new THREE.Group();
@@ -69,21 +74,31 @@ function buildRock(rng: () => number): THREE.Mesh {
 
 function buildRuinPillar(rng: () => number): THREE.Group {
   const group = new THREE.Group();
-  const mat = new THREE.MeshLambertMaterial({ map: SHARED_STONE });
-  const base = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.4, 1.4), mat);
+  const mat = new THREE.MeshStandardMaterial({
+    map: SHARED_STONE,
+    normalMap: SHARED_STONE_NRM,
+    roughness: 0.92,
+    metalness: 0.03,
+  });
+  const marbleMat = new THREE.MeshStandardMaterial({
+    map: SHARED_MARBLE,
+    roughness: 0.4,
+    metalness: 0.05,
+  });
+  const base = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.4, 1.4), marbleMat);
   base.position.y = 0.2;
   base.castShadow = true;
   base.receiveShadow = true;
   group.add(base);
   const shaft = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.42, 0.45, 2.6, 12),
+    new THREE.CylinderGeometry(0.42, 0.45, 2.6, 16),
     mat,
   );
   shaft.position.y = 1.7;
   shaft.castShadow = true;
   shaft.receiveShadow = true;
   group.add(shaft);
-  const cap = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.3, 1.1), mat);
+  const cap = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.3, 1.1), marbleMat);
   cap.position.y = 3.15;
   cap.castShadow = true;
   cap.receiveShadow = true;
@@ -123,7 +138,12 @@ function buildBush(rng: () => number): THREE.Group {
 
 function buildBrokenWall(rng: () => number): THREE.Group {
   const group = new THREE.Group();
-  const mat = new THREE.MeshLambertMaterial({ map: SHARED_STONE });
+  const mat = new THREE.MeshStandardMaterial({
+    map: SHARED_STONE,
+    normalMap: SHARED_STONE_NRM,
+    roughness: 0.95,
+    metalness: 0.02,
+  });
   const len = 3 + rng() * 4;
   const blocks = (len / 0.7) | 0;
   for (let i = 0; i < blocks; i++) {
@@ -162,20 +182,26 @@ export function createWorld(): World {
   }
   groundGeo.computeVertexNormals();
 
-  const groundMat = new THREE.MeshLambertMaterial({
+  const groundMat = new THREE.MeshStandardMaterial({
     map: makeGrassTexture(1024),
+    roughness: 0.95,
+    metalness: 0.0,
   });
   const ground = new THREE.Mesh(groundGeo, groundMat);
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
   scene.add(ground);
 
-  const stonePathTex = makeStoneTexture(512);
-  stonePathTex.repeat.set(4, 0.7);
-  const pathMat = new THREE.MeshLambertMaterial({
-    map: stonePathTex,
+  const cobble = makeCobblestoneTexture(1024);
+  cobble.map.repeat.set(2, 0.5);
+  cobble.normalMap.repeat.set(2, 0.5);
+  const pathMat = new THREE.MeshStandardMaterial({
+    map: cobble.map,
+    normalMap: cobble.normalMap,
+    roughness: 0.85,
+    metalness: 0.05,
     transparent: true,
-    opacity: 0.92,
+    opacity: 0.96,
   });
 
   for (let i = 0; i < 3; i++) {
@@ -190,6 +216,21 @@ export function createWorld(): World {
     path.receiveShadow = true;
     scene.add(path);
   }
+
+  // central plaza marble disc
+  const plazaMat = new THREE.MeshStandardMaterial({
+    map: SHARED_MARBLE,
+    roughness: 0.35,
+    metalness: 0.1,
+  });
+  const plaza = new THREE.Mesh(
+    new THREE.CircleGeometry(5, 48),
+    plazaMat,
+  );
+  plaza.rotation.x = -Math.PI / 2;
+  plaza.position.y = 0.025;
+  plaza.receiveShadow = true;
+  scene.add(plaza);
 
   const ambient = new THREE.AmbientLight(0xc8d4e8, 0.6);
   scene.add(ambient);

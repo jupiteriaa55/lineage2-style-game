@@ -9,6 +9,8 @@ import type {
 import {
   makeFabricTexture,
   makeMetalTexture,
+  makeOrnateMetalTexture,
+  makeLeatherTexture,
   makeSkinTexture,
 } from "./textures";
 
@@ -224,10 +226,10 @@ function defaultStats(): Stats {
   };
 }
 
-const PLAYER_SKIN = makeSkinTexture(128, [232, 200, 170]);
-const PLAYER_BODY = makeMetalTexture(256, [70, 90, 140]);
-const PLAYER_ACCENT = makeMetalTexture(256, [100, 70, 32]);
-const PLAYER_CAPE = makeFabricTexture(256, [140, 25, 30]);
+const PLAYER_SKIN = makeSkinTexture(256, [232, 200, 170]);
+const PLAYER_BODY = makeOrnateMetalTexture(512, [70, 90, 140], "#d4b76a");
+const PLAYER_ACCENT = makeLeatherTexture(256, [105, 70, 38]);
+const PLAYER_CAPE = makeFabricTexture(512, [140, 25, 30], "#d4b76a");
 
 export function createPlayer(scene: THREE.Scene): Entity {
   const { group, rig } = buildHumanoidRig({

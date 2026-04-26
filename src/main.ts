@@ -9,12 +9,13 @@ import {
   updateHpBar,
 } from "./entities";
 import { createHUD } from "./hud";
-import { createSkillBook, tickSkills } from "./skills";
+import { tickSkills } from "./skills";
 import {
   applyHeal,
   grantXP,
   newXPState,
   performAttack,
+  tickBuffs,
   tickEffects,
   tryUseSkill,
   type Effect,
@@ -23,7 +24,11 @@ import { tickEnemyAI } from "./ai";
 import { startAttackAnim, tickAnimation } from "./animation";
 import { createInputController } from "./input";
 import { moveEntity } from "./movement";
-import type { Entity } from "./types";
+import type { Entity, Skill } from "./types";
+import { CLASSES, type ClassId } from "./classes";
+import { SKILL_NODES } from "./skilltree";
+import { getSavedClass, showClassSelect, clearSavedClass } from "./ui_classselect";
+import { createSkillTreeUI } from "./ui_skilltree";
 
 registerSW({ immediate: true });
 
@@ -70,6 +75,34 @@ function shake(intensity: number, duration: number) {
 
 const player = createPlayer(scene);
 player.position.set(0, 0, 0);
+player.progress = {
+  classId: "knight",
+  learned: new Set(),
+  skillPoints: 0,
+  buffs: {},
+};
+
+function applyClassToPlayer(classId: ClassId) {
+  const def = CLASSES[classId];
+  player.progress!.classId = classId;
+  player.name = def.name;
+  player.stats.hpMax = def.baseStats.hpMax;
+  player.stats.mpMax = def.baseStats.mpMax;
+  player.stats.attack = def.baseStats.attack;
+  player.stats.defense = def.baseStats.defense;
+  player.stats.attackRange = def.baseStats.attackRange;
+  player.stats.attackSpeed = def.baseStats.attackSpeed;
+  player.stats.hp = player.stats.hpMax;
+  player.stats.mp = player.stats.mpMax;
+  // grant starting skills
+  for (const id of def.startingSkills) {
+    player.progress!.learned.add(id);
+  }
+  // give 1 starting point
+  if (player.progress!.skillPoints < 1) {
+    player.progress!.skillPoints = Math.max(player.progress!.skillPoints, 1);
+  }
+}
 
 const enemies: Entity[] = [];
 const SPAWN_POINTS: Array<{
@@ -98,12 +131,42 @@ for (const sp of SPAWN_POINTS) {
   enemies.push(enemy);
 }
 
-const skills = createSkillBook();
+let skills: Skill[] = [];
 const xpState = newXPState();
+
+function rebuildHotbar() {
+  const learned = player.progress?.learned ?? new Set<string>();
+  const ordered: Skill[] = [];
+  // keep existing skill cooldown state if same id
+  const oldById = new Map(skills.map((s) => [s.id, s]));
+  for (const id of learned) {
+    const node = SKILL_NODES[id];
+    if (!node) continue;
+    const existing = oldById.get(id);
+    if (existing) {
+      ordered.push(existing);
+    } else {
+      ordered.push({ ...node.skill, cooldownLeft: 0 });
+    }
+  }
+  // sort: tier asc, then minLevel asc
+  ordered.sort((a, b) => {
+    const na = SKILL_NODES[a.id];
+    const nb = SKILL_NODES[b.id];
+    if (na.tier !== nb.tier) return na.tier - nb.tier;
+    return na.minLevel - nb.minLevel;
+  });
+  // assign hotkeys 1..5
+  ordered.forEach((s, i) => {
+    s.hotkey = i < 5 ? String(i + 1) : "";
+  });
+  skills = ordered.slice(0, 8);
+}
 
 const hud = createHUD();
 hud.setPlayer(player);
 hud.updatePlayerStats(player, xpState.xp, xpState.toNext);
+rebuildHotbar();
 hud.updateSkills(skills, player.stats.mp);
 
 const effects: Effect[] = [];
@@ -174,7 +237,12 @@ const hooks = {
       const r = grantXP(player, xpState, victim);
       hud.log(`Defeated ${victim.name} (+${r.xpGained} XP)`, "xp");
       if (r.leveledUp) {
-        hud.log(`Level up! You are now Lv. ${player.level}`, "system");
+        if (player.progress) player.progress.skillPoints += 1;
+        hud.log(
+          `Level up! You are now Lv. ${player.level} (+1 skill point)`,
+          "system",
+        );
+        skillTreeUI.refresh();
         vibrate([20, 40, 20]);
       }
       if (player.attackTarget === victim) player.attackTarget = null;
@@ -255,7 +323,7 @@ function pointerToWorld(
 function tryUseSkillByIndex(i: number) {
   const skill = skills[i];
   if (!skill) return;
-  const result = tryUseSkill(player, skill, hooks, scene, effects);
+  const result = tryUseSkill(player, skill, hooks, scene, effects, enemies);
   if (!result.used && result.reason) {
     hud.log(`${skill.name}: ${result.reason}`, "system");
   } else if (result.used) {
@@ -265,20 +333,32 @@ function tryUseSkillByIndex(i: number) {
 }
 
 hud.onSkillClick(tryUseSkillByIndex);
+
+const skillTreeUI = createSkillTreeUI(player, (node) => {
+  hud.log(`Learned ${node.skill.name}`, "xp");
+  rebuildHotbar();
+  hud.updateSkills(skills, player.stats.mp);
+});
+const skillsBtn = document.getElementById("skills-button");
+skillsBtn?.addEventListener("click", () => skillTreeUI.toggle());
+window.addEventListener("keydown", (e) => {
+  if (e.key.toLowerCase() === "k") {
+    skillTreeUI.toggle();
+  }
+});
+
 hud.onMenuAction((action) => {
   if (action === "reset") {
+    clearSavedClass();
     player.level = 1;
-    player.stats.hpMax = 200;
-    player.stats.mpMax = 100;
-    player.stats.attack = 18;
-    player.stats.defense = 6;
-    player.stats.hp = player.stats.hpMax;
-    player.stats.mp = player.stats.mpMax;
+    if (player.progress) {
+      player.progress.learned = new Set();
+      player.progress.skillPoints = 0;
+      player.progress.buffs = {};
+    }
     xpState.xp = 0;
     xpState.toNext = 100;
-    for (const s of skills) s.cooldownLeft = 0;
-    respawnPlayer();
-    hud.log("Character reset.", "system");
+    location.reload();
   }
 });
 
@@ -426,6 +506,7 @@ function tick() {
 
   tickSkills(skills, dt);
   tickEffects(scene, effects, dt);
+  tickBuffs(player, dt, hooks);
 
   if (player.attackTarget && !player.attackTarget.alive) {
     player.attackTarget = null;
@@ -609,10 +690,24 @@ function tick() {
   requestAnimationFrame(tick);
 }
 
-function start() {
-  hud.show();
+async function start() {
+  // hide loading immediately so the class select can be seen
   hud.hideLoading();
-  hud.log("Welcome to Chronicle Elfs.", "system");
+
+  let saved = getSavedClass();
+  if (!saved) {
+    saved = await showClassSelect();
+  }
+  applyClassToPlayer(saved);
+  rebuildHotbar();
+  hud.setPlayer(player);
+  hud.updateSkills(skills, player.stats.mp);
+  skillTreeUI.refresh();
+
+  hud.show();
+  const cls = CLASSES[saved];
+  hud.log(`Welcome, ${cls.name}.`, "system");
+  hud.log("Press K (or ✦) to open your skill tree.", "system");
   if (isTouch) {
     hud.log("Joystick: move | tap enemy: target | ⚔ attack", "system");
   } else {

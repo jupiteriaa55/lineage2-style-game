@@ -19,6 +19,33 @@
       <div class="spinner"></div>
     </div>
     <canvas id="game-canvas"></canvas>
+
+    <div id="class-select" class="hidden">
+      <div class="cs-panel">
+        <h1>Choose Your Class</h1>
+        <p class="cs-sub">Each class unlocks its own skill tree.</p>
+        <div id="cs-grid"></div>
+        <div class="cs-detail" id="cs-detail">
+          <h2 id="cs-name">—</h2>
+          <p class="cs-tag" id="cs-tag">—</p>
+          <p class="cs-desc" id="cs-desc">Pick a class.</p>
+          <button id="cs-confirm" disabled>Begin Adventure</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="skilltree-panel" class="hidden">
+      <div class="st-panel">
+        <div class="st-header">
+          <h2>Skill Tree</h2>
+          <div class="st-points">Points: <span id="st-points">0</span></div>
+          <button class="st-close" id="st-close">×</button>
+        </div>
+        <div id="st-grid"></div>
+        <div class="st-info" id="st-info">Click a node to view its details.</div>
+      </div>
+    </div>
+
     <div id="hud" class="hidden">
       <div id="top-bar">
         <div class="player-frame">
@@ -66,6 +93,7 @@
         </div>
       </div>
 
+      <button id="skills-button" aria-label="Skills">✦</button>
       <button id="menu-button" aria-label="Menu">≡</button>
       <div id="menu-panel" class="hidden">
         <h2>Menu</h2>

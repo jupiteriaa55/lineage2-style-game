@@ -98,17 +98,30 @@ export function tryUseSkill(
   hooks: CombatHooks,
   scene: THREE.Scene,
   effects: Effect[],
+  enemies?: Entity[],
 ): SkillResult {
   if (skill.cooldownLeft > 0) return { used: false, reason: "On cooldown" };
   if (player.stats.mp < skill.manaCost)
     return { used: false, reason: "Not enough MP" };
 
-  if (skill.id === "iron_will") {
+  // ---------- self / buff skills ----------
+  if (skill.id === "iron_will" || skill.id === "greater_heal") {
     player.stats.mp -= skill.manaCost;
     skill.cooldownLeft = skill.cooldown;
     startCastAnim(player, 0.5);
-    applyHeal(player, skill.heal ?? 50, hooks);
+    applyHeal(player, skill.heal ?? 60, hooks);
     spawnHealEffect(scene, effects, player);
+    return { used: true };
+  }
+  if (skill.id === "resurrection") {
+    player.stats.mp -= skill.manaCost;
+    skill.cooldownLeft = skill.cooldown;
+    startCastAnim(player, 0.7);
+    applyHeal(player, player.stats.hpMax, hooks);
+    applyBuff(player, "invuln", 4, { defenseBonus: 9999 });
+    spawnHealEffect(scene, effects, player);
+    spawnRoarEffect(scene, effects, player.position);
+    if (hooks.shake) hooks.shake(0.4, 0.3);
     return { used: true };
   }
   if (skill.id === "battle_roar") {
@@ -119,6 +132,93 @@ export function tryUseSkill(
     if (hooks.shake) hooks.shake(0.6, 0.3);
     return { used: true };
   }
+  if (skill.id === "bless") {
+    player.stats.mp = player.stats.mpMax;
+    skill.cooldownLeft = skill.cooldown;
+    startCastAnim(player, 0.5);
+    applyBuff(player, "bless", 12, {
+      attackBonus: Math.round(player.stats.attack * 0.2),
+    });
+    spawnBuffAura(scene, effects, player, 0xfff4b0);
+    return { used: true };
+  }
+  if (skill.id === "rage") {
+    player.stats.mp -= skill.manaCost;
+    skill.cooldownLeft = skill.cooldown;
+    startCastAnim(player, 0.4);
+    const cost = Math.round(player.stats.hpMax * 0.1);
+    player.stats.hp = Math.max(1, player.stats.hp - cost);
+    applyBuff(player, "rage", 8, {
+      attackBonus: Math.round(player.stats.attack * 0.5),
+    });
+    spawnBuffAura(scene, effects, player, 0xff5040);
+    if (hooks.shake) hooks.shake(0.4, 0.2);
+    return { used: true };
+  }
+  if (skill.id === "berserker") {
+    player.stats.mp -= skill.manaCost;
+    skill.cooldownLeft = skill.cooldown;
+    startCastAnim(player, 0.5);
+    applyBuff(player, "berserker", 10, {
+      attackBonus: Math.round(player.stats.attack * 0.5),
+      attackSpeedMult: 0.5,
+    });
+    spawnBuffAura(scene, effects, player, 0xff2020);
+    if (hooks.shake) hooks.shake(0.5, 0.3);
+    return { used: true };
+  }
+  if (skill.id === "shield_wall") {
+    player.stats.mp -= skill.manaCost;
+    skill.cooldownLeft = skill.cooldown;
+    startCastAnim(player, 0.4);
+    applyHeal(player, Math.round(player.stats.hpMax * 0.25), hooks);
+    applyBuff(player, "shield_wall", 6, {
+      defenseBonus: Math.round(player.stats.defense * 0.5),
+    });
+    spawnBuffAura(scene, effects, player, 0xa0c8ff);
+    return { used: true };
+  }
+  if (skill.id === "dash") {
+    player.stats.mp -= skill.manaCost;
+    skill.cooldownLeft = skill.cooldown;
+    startCastAnim(player, 0.2);
+    applyHeal(player, skill.heal ?? 30, hooks);
+    // dash forward 4m
+    const fwd = new THREE.Vector3(
+      Math.sin(player.group.rotation.y),
+      0,
+      Math.cos(player.group.rotation.y),
+    );
+    player.position.add(fwd.multiplyScalar(4));
+    spawnDashEffect(scene, effects, player.position);
+    return { used: true };
+  }
+
+  // ---------- AoE around self ----------
+  if (
+    skill.id === "earth_quake" ||
+    skill.id === "cleave" ||
+    skill.id === "whirlwind"
+  ) {
+    player.stats.mp -= skill.manaCost;
+    skill.cooldownLeft = skill.cooldown;
+    startAttackAnim(player);
+    const radius = skill.range || 3;
+    const color = skill.id === "earth_quake" ? 0x8a6633 : 0xfff0a0;
+    spawnAoeRing(scene, effects, player.position, radius, color);
+    if (enemies) {
+      for (const e of enemies) {
+        if (!e.alive) continue;
+        if (e.position.distanceTo(player.position) <= radius) {
+          performAttack(player, e, hooks, skill.damage);
+        }
+      }
+    }
+    if (hooks.shake) hooks.shake(skill.id === "earth_quake" ? 1.0 : 0.5, 0.3);
+    return { used: true };
+  }
+
+  // ---------- targeted skills ----------
   const target = player.attackTarget;
   if (!target || !target.alive) return { used: false, reason: "No target" };
   const dist = player.position.distanceTo(target.position);
@@ -131,14 +231,91 @@ export function tryUseSkill(
     startCastAnim(player, 0.35);
     spawnWindBlade(scene, effects, player.position, target.position, () => {
       performAttack(player, target, hooks, skill.damage);
+    }, 0xa0e8ff);
+  } else if (skill.id === "ice_lance") {
+    startCastAnim(player, 0.4);
+    spawnWindBlade(scene, effects, player.position, target.position, () => {
+      performAttack(player, target, hooks, skill.damage);
+      applyBuff(target, "slow", 3, { speedMult: -0.4 });
+    }, 0x88e0ff);
+  } else if (skill.id === "arrow_shot" || skill.id === "double_shot") {
+    startCastAnim(player, 0.25);
+    spawnArrow(scene, effects, player.position, target.position, () => {
+      performAttack(player, target, hooks, skill.damage);
     });
-  } else if (skill.id === "fireball") {
+    if (skill.id === "double_shot") {
+      setTimeout(() => {
+        if (!target.alive) return;
+        spawnArrow(scene, effects, player.position, target.position, () => {
+          performAttack(player, target, hooks, Math.round(skill.damage * 0.6));
+        });
+      }, 200);
+    }
+  } else if (skill.id === "poison_arrow") {
+    startCastAnim(player, 0.3);
+    spawnArrow(scene, effects, player.position, target.position, () => {
+      performAttack(player, target, hooks, skill.damage);
+      applyBuff(target, "poison", 4, { dotPerSec: skill.damage / 4 });
+    }, 0x88ff66);
+  } else if (skill.id === "fireball" || skill.id === "flame_burst") {
     startCastAnim(player, 0.5);
     spawnFireball(scene, effects, player.position, target.position, () => {
       spawnExplosion(scene, effects, target.position);
       performAttack(player, target, hooks, skill.damage);
       if (hooks.shake) hooks.shake(0.8, 0.25);
     });
+  } else if (skill.id === "blizzard" || skill.id === "rain_of_arrows") {
+    startCastAnim(player, 0.6);
+    const col = skill.id === "blizzard" ? 0x88e0ff : 0xffe080;
+    spawnAoeRing(scene, effects, target.position, 3.5, col);
+    if (enemies) {
+      for (const e of enemies) {
+        if (!e.alive) continue;
+        if (e.position.distanceTo(target.position) <= 3.5) {
+          performAttack(player, e, hooks, skill.damage);
+        }
+      }
+    }
+    if (hooks.shake) hooks.shake(0.6, 0.3);
+  } else if (skill.id === "meteor") {
+    startCastAnim(player, 0.7);
+    spawnMeteor(scene, effects, target.position, () => {
+      spawnExplosion(scene, effects, target.position);
+      if (enemies) {
+        for (const e of enemies) {
+          if (!e.alive) continue;
+          if (e.position.distanceTo(target.position) <= 5) {
+            performAttack(player, e, hooks, skill.damage);
+          }
+        }
+      }
+      if (hooks.shake) hooks.shake(1.5, 0.5);
+    });
+  } else if (skill.id === "holy_smite") {
+    startCastAnim(player, 0.5);
+    spawnHolyPillar(scene, effects, target.position, () => {
+      performAttack(player, target, hooks, skill.damage);
+      if (hooks.shake) hooks.shake(0.4, 0.2);
+    });
+  } else if (skill.id === "charge") {
+    startCastAnim(player, 0.2);
+    // dash player to target
+    const dir = new THREE.Vector3()
+      .subVectors(target.position, player.position)
+      .setY(0)
+      .normalize();
+    const stopDist = Math.max(0.1, target.position.distanceTo(player.position) - 1.6);
+    player.position.add(dir.clone().multiplyScalar(stopDist));
+    player.group.rotation.y = Math.atan2(dir.x, dir.z);
+    spawnDashEffect(scene, effects, player.position);
+    performAttack(player, target, hooks, skill.damage);
+    spawnSlashEffect(scene, effects, target.position);
+    if (hooks.shake) hooks.shake(0.6, 0.2);
+  } else if (skill.id === "shield_bash") {
+    startAttackAnim(player);
+    performAttack(player, target, hooks, skill.damage);
+    spawnSlashEffect(scene, effects, target.position);
+    if (hooks.shake) hooks.shake(0.5, 0.18);
   } else {
     startAttackAnim(player);
     performAttack(player, target, hooks, skill.damage);
@@ -146,6 +323,321 @@ export function tryUseSkill(
     if (hooks.shake) hooks.shake(0.3, 0.12);
   }
   return { used: true };
+}
+
+// ---------- buff system ----------
+interface BuffData {
+  attackBonus?: number;
+  defenseBonus?: number;
+  speedMult?: number;
+  attackSpeedMult?: number;
+  dotPerSec?: number;
+}
+
+function applyBuff(
+  e: Entity,
+  id: string,
+  duration: number,
+  data: BuffData,
+): void {
+  if (!e.progress) {
+    e.progress = {
+      classId: "",
+      learned: new Set(),
+      skillPoints: 0,
+      buffs: {},
+    };
+  }
+  const existing = e.progress.buffs[id];
+  if (existing) revertBuff(e, id);
+  if (data.attackBonus) e.stats.attack += data.attackBonus;
+  if (data.defenseBonus) e.stats.defense += data.defenseBonus;
+  if (data.attackSpeedMult)
+    e.stats.attackSpeed = Math.max(0.1, e.stats.attackSpeed * data.attackSpeedMult);
+  e.progress.buffs[id] = {
+    until: performance.now() / 1000 + duration,
+    data: data as unknown as Record<string, number>,
+  };
+}
+
+function revertBuff(e: Entity, id: string): void {
+  if (!e.progress) return;
+  const b = e.progress.buffs[id];
+  if (!b) return;
+  const data = b.data as unknown as BuffData;
+  if (data.attackBonus) e.stats.attack -= data.attackBonus;
+  if (data.defenseBonus) e.stats.defense -= data.defenseBonus;
+  if (data.attackSpeedMult)
+    e.stats.attackSpeed = e.stats.attackSpeed / data.attackSpeedMult;
+  delete e.progress.buffs[id];
+}
+
+export function tickBuffs(e: Entity, dt: number, hooks: CombatHooks): void {
+  if (!e.progress) return;
+  const now = performance.now() / 1000;
+  for (const id of Object.keys(e.progress.buffs)) {
+    const b = e.progress.buffs[id];
+    const data = b.data as unknown as BuffData;
+    if (data.dotPerSec && e.alive) {
+      const dmg = Math.max(1, Math.round(data.dotPerSec * dt));
+      e.stats.hp = Math.max(0, e.stats.hp - dmg);
+      hooks.onDamage(e, dmg, false);
+      if (e.stats.hp <= 0) e.alive = false;
+    }
+    if (now > b.until) revertBuff(e, id);
+  }
+}
+
+// ---------- new effects ----------
+function spawnArrow(
+  scene: THREE.Scene,
+  effects: Effect[],
+  from: THREE.Vector3,
+  to: THREE.Vector3,
+  onHit: () => void,
+  color = 0xddccaa,
+): void {
+  const arrow = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.04, 0.04, 0.9, 6),
+    new THREE.MeshBasicMaterial({ color }),
+  );
+  const start = from.clone().add(new THREE.Vector3(0, 1.3, 0));
+  const end = to.clone().add(new THREE.Vector3(0, 1.2, 0));
+  arrow.position.copy(start);
+  const dir = new THREE.Vector3().subVectors(end, start).normalize();
+  arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+  scene.add(arrow);
+  const speed = 38;
+  const total = start.distanceTo(end);
+  let traveled = 0;
+  let hit = false;
+  effects.push({
+    obj: arrow,
+    update(dt) {
+      if (hit) return false;
+      traveled += speed * dt;
+      const t = Math.min(1, traveled / total);
+      arrow.position.lerpVectors(start, end, t);
+      if (t >= 1) {
+        hit = true;
+        onHit();
+        return false;
+      }
+      return true;
+    },
+    cleanup() {
+      arrow.geometry.dispose();
+      (arrow.material as THREE.Material).dispose();
+    },
+  });
+}
+
+function spawnHolyPillar(
+  scene: THREE.Scene,
+  effects: Effect[],
+  pos: THREE.Vector3,
+  onHit: () => void,
+): void {
+  const grp = new THREE.Group();
+  grp.position.copy(pos);
+
+  const pillar = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.55, 0.7, 8, 24, 1, true),
+    new THREE.MeshBasicMaterial({
+      color: 0xfff8c0,
+      transparent: true,
+      opacity: 0.0,
+      side: THREE.DoubleSide,
+    }),
+  );
+  pillar.position.y = 4;
+  grp.add(pillar);
+
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.8, 1.1, 32),
+    new THREE.MeshBasicMaterial({
+      color: 0xfff0a0,
+      transparent: true,
+      opacity: 0.95,
+      side: THREE.DoubleSide,
+    }),
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.06;
+  grp.add(ring);
+
+  const light = new THREE.PointLight(0xfff4c8, 2.2, 14);
+  light.position.y = 2;
+  grp.add(light);
+
+  scene.add(grp);
+  let life = 0.7;
+  let fired = false;
+  effects.push({
+    obj: grp,
+    update(dt) {
+      life -= dt;
+      const t = 1 - life / 0.7;
+      (pillar.material as THREE.MeshBasicMaterial).opacity = Math.max(
+        0,
+        0.7 - t * 0.7,
+      );
+      ring.scale.setScalar(1 + t * 1.6);
+      (ring.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 1 - t);
+      if (!fired && t >= 0.2) {
+        fired = true;
+        onHit();
+      }
+      return life > 0;
+    },
+    cleanup() {
+      pillar.geometry.dispose();
+      (pillar.material as THREE.Material).dispose();
+      ring.geometry.dispose();
+      (ring.material as THREE.Material).dispose();
+    },
+  });
+}
+
+function spawnAoeRing(
+  scene: THREE.Scene,
+  effects: Effect[],
+  pos: THREE.Vector3,
+  radius: number,
+  color: number,
+): void {
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.2, 0.4, 48),
+    new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.9,
+      side: THREE.DoubleSide,
+    }),
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.copy(pos);
+  ring.position.y = 0.06;
+  scene.add(ring);
+  let life = 0.6;
+  effects.push({
+    obj: ring,
+    update(dt) {
+      life -= dt;
+      const t = 1 - life / 0.6;
+      ring.scale.setScalar(0.5 + t * radius * 2.2);
+      (ring.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 1 - t);
+      return life > 0;
+    },
+    cleanup() {
+      ring.geometry.dispose();
+      (ring.material as THREE.Material).dispose();
+    },
+  });
+}
+
+function spawnDashEffect(
+  scene: THREE.Scene,
+  effects: Effect[],
+  pos: THREE.Vector3,
+): void {
+  spawnAoeRing(scene, effects, pos, 1.2, 0xc8ffe0);
+}
+
+function spawnBuffAura(
+  scene: THREE.Scene,
+  effects: Effect[],
+  target: Entity,
+  color: number,
+): void {
+  const cyl = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.7, 0.6, 2.4, 24, 1, true),
+    new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.4,
+      side: THREE.DoubleSide,
+    }),
+  );
+  cyl.position.copy(target.position);
+  cyl.position.y += 1.2;
+  scene.add(cyl);
+  let life = 0.8;
+  effects.push({
+    obj: cyl,
+    update(dt) {
+      life -= dt;
+      cyl.position.copy(target.position);
+      cyl.position.y += 1.2;
+      cyl.rotation.y += dt * 4;
+      cyl.scale.setScalar(1 + (0.8 - life) * 0.5);
+      (cyl.material as THREE.MeshBasicMaterial).opacity = Math.max(
+        0,
+        life * 0.5,
+      );
+      return life > 0;
+    },
+    cleanup() {
+      cyl.geometry.dispose();
+      (cyl.material as THREE.Material).dispose();
+    },
+  });
+}
+
+function spawnMeteor(
+  scene: THREE.Scene,
+  effects: Effect[],
+  pos: THREE.Vector3,
+  onHit: () => void,
+): void {
+  const grp = new THREE.Group();
+  const meteor = new THREE.Mesh(
+    new THREE.SphereGeometry(0.7, 16, 16),
+    new THREE.MeshBasicMaterial({ color: 0xff7022 }),
+  );
+  const halo = new THREE.Mesh(
+    new THREE.SphereGeometry(1.1, 16, 16),
+    new THREE.MeshBasicMaterial({
+      color: 0xff5022,
+      transparent: true,
+      opacity: 0.55,
+    }),
+  );
+  grp.add(meteor);
+  grp.add(halo);
+  const light = new THREE.PointLight(0xff8844, 3.5, 16);
+  grp.add(light);
+  const start = pos.clone().add(new THREE.Vector3(0, 22, 0));
+  const end = pos.clone().add(new THREE.Vector3(0, 0.5, 0));
+  grp.position.copy(start);
+  scene.add(grp);
+  let traveled = 0;
+  const total = start.distanceTo(end);
+  const speed = 28;
+  let hit = false;
+  effects.push({
+    obj: grp,
+    update(dt) {
+      if (hit) return false;
+      traveled += speed * dt;
+      const t = Math.min(1, traveled / total);
+      grp.position.lerpVectors(start, end, t);
+      meteor.rotation.x += dt * 8;
+      meteor.rotation.y += dt * 6;
+      if (t >= 1) {
+        hit = true;
+        onHit();
+        return false;
+      }
+      return true;
+    },
+    cleanup() {
+      meteor.geometry.dispose();
+      (meteor.material as THREE.Material).dispose();
+      halo.geometry.dispose();
+      (halo.material as THREE.Material).dispose();
+    },
+  });
 }
 
 export interface Effect {
@@ -487,11 +979,12 @@ function spawnWindBlade(
   from: THREE.Vector3,
   to: THREE.Vector3,
   onHit: () => void,
+  color = 0xa0e8ff,
 ): void {
   const blade = new THREE.Mesh(
     new THREE.PlaneGeometry(1.4, 0.35),
     new THREE.MeshBasicMaterial({
-      color: 0xa0e8ff,
+      color,
       transparent: true,
       opacity: 0.85,
       side: THREE.DoubleSide,
