@@ -1,0 +1,28 @@
+{
+  "name": "lineage2-style-game",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Chronicle Elfs - 3D top-down MMORPG-style game inspired by Lineage 2, built with Three.js + Vite. Includes PWA support and Capacitor Android wrapper for APK builds.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview --host",
+    "typecheck": "tsc --noEmit",
+    "android:sync": "npm run build && cap sync android",
+    "android:open": "cap open android",
+    "android:apk": "npm run build && cap sync android && cd android && ./gradlew assembleDebug"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.3.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.2"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.3.1",
+    "@capacitor/core": "^8.3.1",
+    "@types/three": "^0.184.0",
+    "three": "^0.184.0",
+    "vite-plugin-pwa": "^1.2.0"
+  }
+}
