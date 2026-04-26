@@ -60,7 +60,7 @@ A debug APK is built **automatically** by GitHub Actions on every push and is pu
 
 ### Build the APK locally
 
-Requires JDK 17 and the Android SDK (`ANDROID_HOME` / `ANDROID_SDK_ROOT` set, with platform `android-34` and build-tools installed).
+Requires JDK 21 and the Android SDK (`ANDROID_HOME` / `ANDROID_SDK_ROOT` set, with platform `android-34` and build-tools installed).
 
 ```bash
 npm install
