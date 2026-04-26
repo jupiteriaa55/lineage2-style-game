@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Chronicle Elfs" />
+    <meta name="theme-color" content="#1a1a2e" />
+    <link rel="apple-touch-icon" href="icons/icon-192.png" />
+    <title>Chronicle Elfs</title>
+  </head>
+  <body>
+    <div id="loading-screen">
+      <div class="logo">CHRONICLE ELFS</div>
+      <div class="subtitle">Loading the world...</div>
+      <div class="spinner"></div>
+    </div>
+    <canvas id="game-canvas"></canvas>
+    <div id="hud" class="hidden">
+      <div id="top-bar">
+        <div class="player-frame">
+          <div class="portrait">P</div>
+          <div class="info">
+            <div class="name-row">
+              <span id="player-name">Adventurer</span>
+              <span id="player-level" class="level">Lv. 1</span>
+            </div>
+            <div class="bar hp-bar">
+              <div id="hp-fill" class="bar-fill"></div>
+              <span id="hp-text" class="bar-text">100 / 100</span>
+            </div>
+            <div class="bar mp-bar">
+              <div id="mp-fill" class="bar-fill"></div>
+              <span id="mp-text" class="bar-text">50 / 50</span>
+            </div>
+            <div class="bar xp-bar">
+              <div id="xp-fill" class="bar-fill"></div>
+              <span id="xp-text" class="bar-text">0%</span>
+            </div>
+          </div>
+        </div>
+        <div id="target-frame" class="target-frame hidden">
+          <div class="portrait target-portrait">T</div>
+          <div class="info">
+            <div class="name-row">
+              <span id="target-name">-</span>
+              <span id="target-level" class="level">Lv. ?</span>
+            </div>
+            <div class="bar hp-bar">
+              <div id="target-hp-fill" class="bar-fill"></div>
+              <span id="target-hp-text" class="bar-text">- / -</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="combat-log"></div>
+
+      <div id="bottom-bar">
+        <div id="hotbar"></div>
+        <div id="minimap-frame">
+          <canvas id="minimap"></canvas>
+        </div>
+      </div>
+
+      <button id="menu-button" aria-label="Menu">≡</button>
+      <div id="menu-panel" class="hidden">
+        <h2>Menu</h2>
+        <button data-action="resume">Resume</button>
+        <button data-action="reset">Reset Character</button>
+        <p class="hint">
+          Click left mouse to move/attack. Right click to deselect.<br />
+          Hotkeys 1-5: skills. Touch: tap to move/target, tap skills.
+        </p>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
