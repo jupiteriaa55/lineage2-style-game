@@ -1,4 +1,9 @@
 import * as THREE from "three";
+import {
+  makeGrassTexture,
+  makeStoneTexture,
+  makeBarkTexture,
+} from "./textures";
 
 export const WORLD_SIZE = 200;
 
@@ -10,104 +15,65 @@ export interface World {
   sun: THREE.DirectionalLight;
 }
 
-function makeGroundTexture(): THREE.Texture {
-  const size = 512;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d")!;
+const SHARED_BARK = makeBarkTexture(256);
+const SHARED_STONE = makeStoneTexture(512);
 
-  const grad = ctx.createLinearGradient(0, 0, 0, size);
-  grad.addColorStop(0, "#3d5a2a");
-  grad.addColorStop(1, "#2a4020");
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, size, size);
-
-  for (let i = 0; i < 4000; i++) {
-    const x = Math.random() * size;
-    const y = Math.random() * size;
-    const r = Math.random() * 1.5 + 0.3;
-    const v = Math.random();
-    if (v < 0.55) {
-      ctx.fillStyle = `rgba(${60 + Math.random() * 40},${100 + Math.random() * 60},${40 + Math.random() * 30},${0.4 + Math.random() * 0.4})`;
-    } else if (v < 0.8) {
-      ctx.fillStyle = `rgba(${80 + Math.random() * 40},${60 + Math.random() * 30},${30 + Math.random() * 20},0.5)`;
-    } else {
-      ctx.fillStyle = `rgba(${30 + Math.random() * 30},${50 + Math.random() * 30},${20 + Math.random() * 20},0.6)`;
-    }
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  for (let i = 0; i < 12; i++) {
-    const x = Math.random() * size;
-    const y = Math.random() * size;
-    ctx.fillStyle = `rgba(${110 + Math.random() * 30},${100 + Math.random() * 20},${80},0.4)`;
-    ctx.beginPath();
-    ctx.ellipse(x, y, 30 + Math.random() * 60, 20 + Math.random() * 40, Math.random() * Math.PI, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(8, 8);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
-
-function buildTree(): THREE.Group {
+function buildTree(rng: () => number): THREE.Group {
   const group = new THREE.Group();
-
+  const trunkH = 2.0 + rng() * 1.4;
   const trunk = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.3, 0.45, 2.2, 8),
-    new THREE.MeshLambertMaterial({ color: 0x5b3a1d }),
+    new THREE.CylinderGeometry(0.32, 0.5, trunkH, 8),
+    new THREE.MeshLambertMaterial({ map: SHARED_BARK }),
   );
-  trunk.position.y = 1.1;
+  trunk.position.y = trunkH / 2;
   trunk.castShadow = true;
+  trunk.receiveShadow = true;
   group.add(trunk);
 
-  const leafColors = [0x2c5018, 0x35621e, 0x244218];
-  for (let i = 0; i < 3; i++) {
+  const leafColors = [0x2c5018, 0x35621e, 0x244218, 0x3d6b22];
+  const tiers = 3 + ((rng() * 2) | 0);
+  for (let i = 0; i < tiers; i++) {
     const leaf = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(1.0 + Math.random() * 0.4, 0),
+      new THREE.IcosahedronGeometry(0.9 + rng() * 0.5, 0),
       new THREE.MeshLambertMaterial({
-        color: leafColors[i % leafColors.length],
+        color: leafColors[(rng() * leafColors.length) | 0],
         flatShading: true,
       }),
     );
     leaf.position.set(
-      (Math.random() - 0.5) * 0.6,
-      2.1 + i * 0.6,
-      (Math.random() - 0.5) * 0.6,
+      (rng() - 0.5) * 0.7,
+      trunkH + 0.1 + i * 0.55,
+      (rng() - 0.5) * 0.7,
     );
+    leaf.scale.setScalar(0.95 + rng() * 0.4);
     leaf.castShadow = true;
     group.add(leaf);
   }
   return group;
 }
 
-function buildRock(): THREE.Mesh {
+function buildRock(rng: () => number): THREE.Mesh {
   const rock = new THREE.Mesh(
-    new THREE.DodecahedronGeometry(0.6 + Math.random() * 0.5, 0),
+    new THREE.DodecahedronGeometry(0.6 + rng() * 0.5, 0),
     new THREE.MeshLambertMaterial({
-      color: 0x6b6b6b,
+      color: new THREE.Color().setHSL(0.08, 0.05, 0.36 + rng() * 0.12),
       flatShading: true,
     }),
   );
   rock.position.y = 0.3;
-  rock.rotation.set(Math.random(), Math.random(), Math.random());
+  rock.rotation.set(rng(), rng(), rng());
   rock.castShadow = true;
+  rock.receiveShadow = true;
   return rock;
 }
 
-function buildRuinPillar(): THREE.Group {
+function buildRuinPillar(rng: () => number): THREE.Group {
   const group = new THREE.Group();
-  const mat = new THREE.MeshLambertMaterial({ color: 0xb8b09a });
-  const base = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.4, 1.2), mat);
+  const mat = new THREE.MeshLambertMaterial({ map: SHARED_STONE });
+  const base = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.4, 1.4), mat);
   base.position.y = 0.2;
   base.castShadow = true;
+  base.receiveShadow = true;
   group.add(base);
   const shaft = new THREE.Mesh(
     new THREE.CylinderGeometry(0.42, 0.45, 2.6, 12),
@@ -115,59 +81,135 @@ function buildRuinPillar(): THREE.Group {
   );
   shaft.position.y = 1.7;
   shaft.castShadow = true;
+  shaft.receiveShadow = true;
   group.add(shaft);
-  const cap = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.3, 1.0), mat);
+  const cap = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.3, 1.1), mat);
   cap.position.y = 3.15;
   cap.castShadow = true;
+  cap.receiveShadow = true;
   group.add(cap);
+  if (rng() < 0.4) {
+    shaft.scale.y = 0.45 + rng() * 0.4;
+    shaft.position.y = (2.6 * shaft.scale.y) / 2 + 0.4;
+    cap.visible = false;
+    group.rotation.z = (rng() - 0.5) * 0.2;
+  }
+  return group;
+}
+
+function buildBush(rng: () => number): THREE.Group {
+  const group = new THREE.Group();
+  const color = new THREE.Color().setHSL(
+    0.27 + rng() * 0.04,
+    0.45,
+    0.22 + rng() * 0.1,
+  );
+  for (let i = 0; i < 4; i++) {
+    const ball = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(0.4 + rng() * 0.2, 0),
+      new THREE.MeshLambertMaterial({ color, flatShading: true }),
+    );
+    ball.position.set(
+      (rng() - 0.5) * 0.6,
+      0.35 + rng() * 0.2,
+      (rng() - 0.5) * 0.6,
+    );
+    ball.castShadow = true;
+    ball.receiveShadow = true;
+    group.add(ball);
+  }
+  return group;
+}
+
+function buildBrokenWall(rng: () => number): THREE.Group {
+  const group = new THREE.Group();
+  const mat = new THREE.MeshLambertMaterial({ map: SHARED_STONE });
+  const len = 3 + rng() * 4;
+  const blocks = (len / 0.7) | 0;
+  for (let i = 0; i < blocks; i++) {
+    if (rng() < 0.18) continue;
+    const h = 0.6 + rng() * 1.2;
+    const block = new THREE.Mesh(
+      new THREE.BoxGeometry(0.7, h, 0.7),
+      mat,
+    );
+    block.position.set(i * 0.72, h / 2, (rng() - 0.5) * 0.05);
+    block.rotation.y = (rng() - 0.5) * 0.15;
+    block.castShadow = true;
+    block.receiveShadow = true;
+    group.add(block);
+  }
+  group.rotation.y = rng() * Math.PI * 2;
   return group;
 }
 
 export function createWorld(): World {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x4a6f9c);
-  scene.fog = new THREE.Fog(0x4a6f9c, 60, 180);
+  scene.background = new THREE.Color(0x6b8db8);
+  scene.fog = new THREE.Fog(0x6b8db8, 70, 200);
 
-  const groundGeo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, 64, 64);
+  const groundGeo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, 96, 96);
   const positions = groundGeo.attributes.position;
   for (let i = 0; i < positions.count; i++) {
     const x = positions.getX(i);
     const y = positions.getY(i);
     const h =
-      Math.sin(x * 0.05) * 0.4 +
-      Math.cos(y * 0.07) * 0.3 +
-      (Math.random() - 0.5) * 0.15;
+      Math.sin(x * 0.05) * 0.5 +
+      Math.cos(y * 0.07) * 0.4 +
+      Math.sin(x * 0.18 + y * 0.12) * 0.18 +
+      (Math.random() - 0.5) * 0.12;
     positions.setZ(i, h);
   }
   groundGeo.computeVertexNormals();
 
   const groundMat = new THREE.MeshLambertMaterial({
-    map: makeGroundTexture(),
+    map: makeGrassTexture(1024),
   });
   const ground = new THREE.Mesh(groundGeo, groundMat);
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
   scene.add(ground);
 
-  const ambient = new THREE.AmbientLight(0xb8c8e0, 0.55);
+  const stonePathTex = makeStoneTexture(512);
+  stonePathTex.repeat.set(4, 0.7);
+  const pathMat = new THREE.MeshLambertMaterial({
+    map: stonePathTex,
+    transparent: true,
+    opacity: 0.92,
+  });
+
+  for (let i = 0; i < 3; i++) {
+    const angle = (i / 3) * Math.PI * 2;
+    const path = new THREE.Mesh(
+      new THREE.PlaneGeometry(40, 3.5, 1, 1),
+      pathMat,
+    );
+    path.rotation.x = -Math.PI / 2;
+    path.rotation.z = angle;
+    path.position.set(Math.cos(angle) * 16, 0.02, Math.sin(angle) * 16);
+    path.receiveShadow = true;
+    scene.add(path);
+  }
+
+  const ambient = new THREE.AmbientLight(0xc8d4e8, 0.6);
   scene.add(ambient);
 
-  const sun = new THREE.DirectionalLight(0xffe7b8, 1.05);
+  const sun = new THREE.DirectionalLight(0xfff0c8, 1.15);
   sun.position.set(40, 60, 25);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  const d = 50;
+  const d = 55;
   sun.shadow.camera.left = -d;
   sun.shadow.camera.right = d;
   sun.shadow.camera.top = d;
   sun.shadow.camera.bottom = -d;
   sun.shadow.camera.near = 1;
-  sun.shadow.camera.far = 200;
+  sun.shadow.camera.far = 220;
   sun.shadow.bias = -0.0005;
   scene.add(sun);
   scene.add(sun.target);
 
-  const hemi = new THREE.HemisphereLight(0x9fb9d9, 0x3a2818, 0.35);
+  const hemi = new THREE.HemisphereLight(0xa5c4e0, 0x3a2818, 0.4);
   scene.add(hemi);
 
   const obstacles: THREE.Object3D[] = [];
@@ -176,46 +218,77 @@ export function createWorld(): World {
   const half = WORLD_SIZE / 2 - 5;
   const rng = mulberry32(1337);
 
-  for (let i = 0; i < 80; i++) {
-    const tree = buildTree();
+  for (let i = 0; i < 90; i++) {
+    const tree = buildTree(rng);
     tree.position.set((rng() * 2 - 1) * half, 0, (rng() * 2 - 1) * half);
-    if (tree.position.length() < 12) {
-      tree.position.normalize().multiplyScalar(12 + rng() * 5);
+    if (tree.position.length() < 14) {
+      tree.position.normalize().multiplyScalar(14 + rng() * 6);
     }
-    tree.scale.setScalar(0.8 + rng() * 0.7);
+    tree.scale.setScalar(0.85 + rng() * 0.7);
     tree.rotation.y = rng() * Math.PI * 2;
     scene.add(tree);
     obstacles.push(tree);
-    const box = new THREE.Box3().setFromCenterAndSize(
-      tree.position.clone().add(new THREE.Vector3(0, 1, 0)),
-      new THREE.Vector3(0.9, 2, 0.9),
+    obstacleBoxes.push(
+      new THREE.Box3().setFromCenterAndSize(
+        tree.position.clone().add(new THREE.Vector3(0, 1, 0)),
+        new THREE.Vector3(0.95, 2, 0.95),
+      ),
     );
-    obstacleBoxes.push(box);
   }
 
-  for (let i = 0; i < 60; i++) {
-    const rock = buildRock();
+  for (let i = 0; i < 70; i++) {
+    const rock = buildRock(rng);
     rock.position.set((rng() * 2 - 1) * half, 0.3, (rng() * 2 - 1) * half);
     rock.scale.setScalar(0.6 + rng() * 1.4);
     scene.add(rock);
     obstacles.push(rock);
-    const box = new THREE.Box3().setFromCenterAndSize(
-      rock.position.clone(),
-      new THREE.Vector3(1.2, 1, 1.2).multiplyScalar(rock.scale.x),
+    obstacleBoxes.push(
+      new THREE.Box3().setFromCenterAndSize(
+        rock.position.clone(),
+        new THREE.Vector3(1.2, 1, 1.2).multiplyScalar(rock.scale.x),
+      ),
     );
-    obstacleBoxes.push(box);
   }
 
-  for (let i = 0; i < 8; i++) {
-    const pillar = buildRuinPillar();
-    pillar.position.set((rng() * 2 - 1) * half * 0.7, 0, (rng() * 2 - 1) * half * 0.7);
+  for (let i = 0; i < 50; i++) {
+    const bush = buildBush(rng);
+    bush.position.set((rng() * 2 - 1) * half, 0, (rng() * 2 - 1) * half);
+    bush.scale.setScalar(0.7 + rng() * 0.6);
+    scene.add(bush);
+  }
+
+  for (let i = 0; i < 10; i++) {
+    const pillar = buildRuinPillar(rng);
+    pillar.position.set(
+      (rng() * 2 - 1) * half * 0.7,
+      0,
+      (rng() * 2 - 1) * half * 0.7,
+    );
     scene.add(pillar);
     obstacles.push(pillar);
-    const box = new THREE.Box3().setFromCenterAndSize(
-      pillar.position.clone().add(new THREE.Vector3(0, 1.5, 0)),
-      new THREE.Vector3(1.3, 3.4, 1.3),
+    obstacleBoxes.push(
+      new THREE.Box3().setFromCenterAndSize(
+        pillar.position.clone().add(new THREE.Vector3(0, 1.5, 0)),
+        new THREE.Vector3(1.4, 3.4, 1.4),
+      ),
     );
-    obstacleBoxes.push(box);
+  }
+
+  for (let i = 0; i < 6; i++) {
+    const wall = buildBrokenWall(rng);
+    wall.position.set(
+      (rng() * 2 - 1) * half * 0.6,
+      0,
+      (rng() * 2 - 1) * half * 0.6,
+    );
+    scene.add(wall);
+    obstacles.push(wall);
+    obstacleBoxes.push(
+      new THREE.Box3().setFromCenterAndSize(
+        wall.position.clone().add(new THREE.Vector3(0, 0.6, 0)),
+        new THREE.Vector3(4, 1.2, 1),
+      ),
+    );
   }
 
   return { scene, ground, obstacles, obstacleBoxes, sun };

@@ -27,6 +27,29 @@ export interface Skill {
 
 export type EntityKind = "player" | "enemy";
 
+export interface EntityRig {
+  body: THREE.Group;
+  armL: THREE.Group;
+  armR: THREE.Group;
+  legL: THREE.Group;
+  legR: THREE.Group;
+  weapon?: THREE.Object3D;
+  weaponPivot?: THREE.Group;
+  cape?: THREE.Mesh;
+  bodyMaterials: THREE.MeshLambertMaterial[];
+}
+
+export type AnimState = "idle" | "walk" | "attack" | "cast" | "hit" | "death";
+
+export interface AnimController {
+  state: AnimState;
+  stateTime: number;
+  attackProgress: number;
+  castProgress: number;
+  hitFlash: number;
+  swingDir: 1 | -1;
+}
+
 export interface Entity {
   id: string;
   kind: EntityKind;
@@ -44,6 +67,9 @@ export interface Entity {
   respawn?: { at: number; spawn: THREE.Vector3 };
   hpBar?: { bg: THREE.Sprite; fill: THREE.Sprite };
   ai?: AIState;
+  rig?: EntityRig;
+  anim?: AnimController;
+  bobTime?: number;
 }
 
 export interface AIState {

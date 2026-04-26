@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import "./style.css";
 import { registerSW } from "virtual:pwa-register";
-import { createWorld, WORLD_SIZE } from "./world";
+import { createWorld, WORLD_SIZE, isInsideObstacle } from "./world";
 import {
   createEnemy,
   createPlayer,
@@ -20,10 +20,18 @@ import {
   type Effect,
 } from "./combat";
 import { tickEnemyAI } from "./ai";
-import { bobAnimation, moveEntity } from "./movement";
+import { startAttackAnim, tickAnimation } from "./animation";
+import { createInputController } from "./input";
+import { moveEntity } from "./movement";
 import type { Entity } from "./types";
 
 registerSW({ immediate: true });
+
+const isTouch =
+  "ontouchstart" in window ||
+  navigator.maxTouchPoints > 0 ||
+  matchMedia("(pointer: coarse)").matches;
+if (isTouch) document.body.classList.add("touch");
 
 const canvas = document.getElementById("game-canvas") as HTMLCanvasElement;
 const renderer = new THREE.WebGLRenderer({
@@ -46,14 +54,28 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   500,
 );
-const cameraOffset = new THREE.Vector3(0, 22, 16);
-const cameraLookAhead = new THREE.Vector3();
+
+let cameraDistance = 22;
+let cameraYaw = 0;
+const CAM_PITCH = 0.95; // ~ tan-1 of height/horiz
+let cameraShakeTime = 0;
+let cameraShakeIntensity = 0;
+const _camTarget = new THREE.Vector3();
+const _camDesired = new THREE.Vector3();
+
+function shake(intensity: number, duration: number) {
+  cameraShakeIntensity = Math.max(cameraShakeIntensity, intensity);
+  cameraShakeTime = Math.max(cameraShakeTime, duration);
+}
 
 const player = createPlayer(scene);
 player.position.set(0, 0, 0);
 
 const enemies: Entity[] = [];
-const SPAWN_POINTS: Array<{ key: keyof typeof ENEMY_TEMPLATES; pos: [number, number] }> = [
+const SPAWN_POINTS: Array<{
+  key: keyof typeof ENEMY_TEMPLATES;
+  pos: [number, number];
+}> = [
   { key: "goblin", pos: [12, 5] },
   { key: "goblin", pos: [15, -3] },
   { key: "goblin", pos: [-10, 8] },
@@ -86,6 +108,39 @@ hud.updateSkills(skills, player.stats.mp);
 
 const effects: Effect[] = [];
 
+// target reticle
+const targetRing = new THREE.Mesh(
+  new THREE.RingGeometry(0.9, 1.05, 32),
+  new THREE.MeshBasicMaterial({
+    color: 0xff5050,
+    transparent: true,
+    opacity: 0.85,
+    side: THREE.DoubleSide,
+    depthTest: false,
+  }),
+);
+targetRing.rotation.x = -Math.PI / 2;
+targetRing.visible = false;
+targetRing.renderOrder = 5;
+scene.add(targetRing);
+
+// movement target marker
+const moveMarker = new THREE.Mesh(
+  new THREE.RingGeometry(0.35, 0.5, 24),
+  new THREE.MeshBasicMaterial({
+    color: 0xffe07a,
+    transparent: true,
+    opacity: 0.9,
+    side: THREE.DoubleSide,
+    depthTest: false,
+  }),
+);
+moveMarker.rotation.x = -Math.PI / 2;
+moveMarker.visible = false;
+moveMarker.renderOrder = 4;
+scene.add(moveMarker);
+let moveMarkerLife = 0;
+
 const hooks = {
   onDamage(target: Entity, amount: number, isCrit: boolean) {
     hud.spawnFloat(
@@ -98,11 +153,16 @@ const hooks = {
     );
     if (target === player) {
       hud.log(`You take ${amount} damage`, "dmg");
-    } else if (player.attackTarget === target || target.attackTarget === player) {
+      vibrate(20);
+    } else if (
+      player.attackTarget === target ||
+      target.attackTarget === player
+    ) {
       hud.log(`${target.name} takes ${amount}${isCrit ? " (crit!)" : ""}`, "dmg");
     }
   },
   onHeal(target: Entity, amount: number) {
+    if (amount <= 0) return;
     hud.spawnFloat(
       { worldPos: target.position, text: `+${amount}`, type: "heal" },
       camera,
@@ -115,6 +175,7 @@ const hooks = {
       hud.log(`Defeated ${victim.name} (+${r.xpGained} XP)`, "xp");
       if (r.leveledUp) {
         hud.log(`Level up! You are now Lv. ${player.level}`, "system");
+        vibrate([20, 40, 20]);
       }
       if (player.attackTarget === victim) player.attackTarget = null;
     } else if (victim === player) {
@@ -122,10 +183,24 @@ const hooks = {
       respawnPlayer();
     }
     if (victim !== player) {
-      victim.group.visible = false;
+      // hide after death animation finishes
+      setTimeout(() => {
+        if (!victim.alive) victim.group.visible = false;
+      }, 800);
     }
   },
+  shake,
 };
+
+function vibrate(pattern: number | number[]): void {
+  if (navigator.vibrate) {
+    try {
+      navigator.vibrate(pattern);
+    } catch {
+      /* ignore */
+    }
+  }
+}
 
 function respawnPlayer() {
   player.position.set(0, 0, 0);
@@ -134,16 +209,24 @@ function respawnPlayer() {
   player.alive = true;
   player.attackTarget = null;
   player.moveTarget = null;
+  if (player.anim) {
+    player.anim.state = "idle";
+    player.anim.stateTime = 0;
+  }
+  if (player.rig) {
+    player.rig.body.rotation.x = 0;
+    player.rig.body.position.y = 0;
+  }
   hud.log("You respawned at the starting point.", "system");
 }
 
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 
-function pointerToWorld(clientX: number, clientY: number): {
-  hit: THREE.Vector3 | null;
-  enemy: Entity | null;
-} {
+function pointerToWorld(
+  clientX: number,
+  clientY: number,
+): { hit: THREE.Vector3 | null; enemy: Entity | null } {
   pointer.x = (clientX / window.innerWidth) * 2 - 1;
   pointer.y = -(clientY / window.innerHeight) * 2 + 1;
   raycaster.setFromCamera(pointer, camera);
@@ -177,6 +260,7 @@ function tryUseSkillByIndex(i: number) {
     hud.log(`${skill.name}: ${result.reason}`, "system");
   } else if (result.used) {
     hud.log(`Used ${skill.name}`, "system");
+    vibrate(15);
   }
 }
 
@@ -198,32 +282,122 @@ hud.onMenuAction((action) => {
   }
 });
 
-canvas.addEventListener("contextmenu", (e) => e.preventDefault());
-canvas.addEventListener("pointerdown", (e) => {
-  if (e.button === 2) {
-    player.attackTarget = null;
-    return;
+// ---- input controller setup ----
+const joyEl = document.getElementById("joystick") as HTMLDivElement | null;
+const joyKnob = document.getElementById(
+  "joystick-knob",
+) as HTMLDivElement | null;
+const input = createInputController({
+  canvas,
+  joystick: joyEl && joyKnob ? { el: joyEl, knob: joyKnob } : null,
+});
+
+input.on("skill1", () => tryUseSkillByIndex(0));
+input.on("skill2", () => tryUseSkillByIndex(1));
+input.on("skill3", () => tryUseSkillByIndex(2));
+input.on("skill4", () => tryUseSkillByIndex(3));
+input.on("skill5", () => tryUseSkillByIndex(4));
+input.on("target_next", () => targetNext());
+input.on("deselect", () => {
+  player.attackTarget = null;
+  player.moveTarget = null;
+});
+input.on("attack_held", () => {
+  if (player.attackTarget && player.attackTarget.alive) {
+    /* let main loop attack */
+  } else {
+    targetNext();
   }
-  const { hit, enemy } = pointerToWorld(e.clientX, e.clientY);
+});
+
+input.setOnTapWorld((cx, cy) => {
+  const { hit, enemy } = pointerToWorld(cx, cy);
   if (enemy) {
     player.attackTarget = enemy;
     player.moveTarget = enemy.position.clone();
     hud.log(`Targeted ${enemy.name}`, "system");
+    vibrate(8);
   } else if (hit) {
     player.attackTarget = null;
     player.moveTarget = hit.clone();
+    moveMarker.position.copy(hit);
+    moveMarker.position.y = 0.04;
+    moveMarker.visible = true;
+    moveMarkerLife = 0.6;
+    spawnTapRipple(cx, cy);
   }
 });
 
-window.addEventListener("keydown", (e) => {
-  if (e.repeat) return;
-  if (e.key >= "1" && e.key <= "5") {
-    tryUseSkillByIndex(parseInt(e.key, 10) - 1);
-  } else if (e.key === "Escape") {
-    player.attackTarget = null;
-    player.moveTarget = null;
+function spawnTapRipple(x: number, y: number) {
+  const r = document.createElement("div");
+  r.className = "tap-ripple";
+  r.style.left = `${x}px`;
+  r.style.top = `${y}px`;
+  document.body.appendChild(r);
+  setTimeout(() => r.remove(), 600);
+}
+
+// canvas mouse click → tap world (so desktop click = move/target)
+canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+canvas.addEventListener("pointerdown", (e) => {
+  if (e.pointerType === "mouse") {
+    if (e.button === 2) {
+      player.attackTarget = null;
+      return;
+    }
+    if (e.button !== 0) return;
+    const { hit, enemy } = pointerToWorld(e.clientX, e.clientY);
+    if (enemy) {
+      player.attackTarget = enemy;
+      player.moveTarget = enemy.position.clone();
+      hud.log(`Targeted ${enemy.name}`, "system");
+    } else if (hit) {
+      player.attackTarget = null;
+      player.moveTarget = hit.clone();
+      moveMarker.position.copy(hit);
+      moveMarker.position.y = 0.04;
+      moveMarker.visible = true;
+      moveMarkerLife = 0.6;
+    }
   }
 });
+
+// touch action buttons
+const btnAttack = document.getElementById("btn-attack");
+const btnTarget = document.getElementById("btn-target");
+const btnDeselect = document.getElementById("btn-deselect");
+btnAttack?.addEventListener("click", () => {
+  if (!player.attackTarget || !player.attackTarget.alive) targetNext();
+  vibrate(15);
+});
+btnTarget?.addEventListener("click", () => {
+  targetNext();
+  vibrate(10);
+});
+btnDeselect?.addEventListener("click", () => {
+  player.attackTarget = null;
+  player.moveTarget = null;
+  vibrate(8);
+});
+
+function targetNext() {
+  let best: Entity | null = null;
+  let bestD = Infinity;
+  for (const e of enemies) {
+    if (!e.alive) continue;
+    const d = e.position.distanceTo(player.position);
+    if (e === player.attackTarget) continue;
+    if (d < bestD && d < 30) {
+      bestD = d;
+      best = e;
+    }
+  }
+  if (best) {
+    player.attackTarget = best;
+    hud.log(`Targeted ${best.name}`, "system");
+    vibrate(8);
+  }
+}
 
 window.addEventListener("resize", () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -238,11 +412,68 @@ function tick() {
   const dt = Math.min(0.05, now - lastTime);
   lastTime = now;
 
+  input.consume();
+
+  // drain camera deltas
+  cameraDistance = THREE.MathUtils.clamp(
+    cameraDistance + input.state.zoomDelta * 1.5,
+    10,
+    40,
+  );
+  cameraYaw += input.state.rotateDelta * dt * 2;
+  input.state.zoomDelta = 0;
+  input.state.rotateDelta = 0;
+
   tickSkills(skills, dt);
   tickEffects(scene, effects, dt);
 
   if (player.attackTarget && !player.attackTarget.alive) {
     player.attackTarget = null;
+  }
+
+  // resolve directional movement from input (world-relative, taking yaw into account)
+  let movingFromInput = false;
+  if (input.state.moveIntensity > 0.05 && player.alive) {
+    const ix = input.state.moveX;
+    const iy = input.state.moveY;
+    const cs = Math.cos(cameraYaw);
+    const sn = Math.sin(cameraYaw);
+    // screen-y forward maps to -world Z (camera looks toward player from +Z+yaw)
+    const wx = ix * cs + iy * sn;
+    const wz = -ix * sn + iy * cs;
+    const dirLen = Math.hypot(wx, wz);
+    if (dirLen > 0.001) {
+      const len = Math.min(1, input.state.moveIntensity);
+      const speed = 6;
+      const step = speed * dt * len;
+      const next = player.position
+        .clone()
+        .add(new THREE.Vector3((wx / dirLen) * step, 0, (wz / dirLen) * step));
+      const HALF = WORLD_SIZE / 2 - 2;
+      next.x = THREE.MathUtils.clamp(next.x, -HALF, HALF);
+      next.z = THREE.MathUtils.clamp(next.z, -HALF, HALF);
+      if (!isInsideObstacle(next, world.obstacleBoxes, 0.7)) {
+        player.position.x = next.x;
+        player.position.z = next.z;
+      } else {
+        const sx = player.position.clone();
+        sx.x = next.x;
+        if (!isInsideObstacle(sx, world.obstacleBoxes, 0.7))
+          player.position.x = sx.x;
+        const sz = player.position.clone();
+        sz.z = next.z;
+        if (!isInsideObstacle(sz, world.obstacleBoxes, 0.7))
+          player.position.z = sz.z;
+      }
+      const yaw = Math.atan2(wx / dirLen, wz / dirLen);
+      const cur = player.group.rotation.y;
+      let diff = yaw - cur;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      player.group.rotation.y = cur + diff * Math.min(1, dt * 12);
+      player.moveTarget = null; // direct input cancels click-to-move
+      movingFromInput = true;
+    }
   }
 
   if (player.alive) {
@@ -251,8 +482,9 @@ function tick() {
     if (t && t.alive) {
       const d = player.position.distanceTo(t.position);
       if (d <= player.stats.attackRange) {
-        player.moveTarget = null;
+        if (!movingFromInput) player.moveTarget = null;
         if (player.attackCooldown <= 0) {
+          startAttackAnim(player);
           performAttack(player, t, hooks);
           player.attackCooldown = player.stats.attackSpeed;
           const dir = new THREE.Vector3()
@@ -260,7 +492,7 @@ function tick() {
             .normalize();
           player.group.rotation.y = Math.atan2(dir.x, dir.z);
         }
-      } else {
+      } else if (!movingFromInput) {
         player.moveTarget = t.position.clone();
       }
     }
@@ -276,12 +508,14 @@ function tick() {
         player.stats.hp + 1.5 * dt,
       );
     }
-    moveEntity(player, 6, dt, world.obstacleBoxes);
-    bobAnimation(player, now);
+    if (!movingFromInput) {
+      moveEntity(player, 6, dt, world.obstacleBoxes);
+    }
   }
 
   for (const enemy of enemies) {
     if (!enemy.alive) {
+      tickAnimation(enemy, dt, false);
       if (enemy.respawn && now >= enemy.respawn.at && enemy.respawn.at > 0) {
         enemy.alive = true;
         enemy.stats.hp = enemy.stats.hpMax;
@@ -289,14 +523,24 @@ function tick() {
         enemy.group.visible = true;
         enemy.attackTarget = null;
         enemy.moveTarget = null;
+        if (enemy.anim) {
+          enemy.anim.state = "idle";
+          enemy.anim.stateTime = 0;
+        }
+        if (enemy.rig) {
+          enemy.rig.body.rotation.x = 0;
+          enemy.rig.body.position.y = 0;
+        }
         updateHpBar(enemy);
       }
       continue;
     }
     tickEnemyAI(enemy, player, dt, hooks);
     moveEntity(enemy, 3.2, dt, world.obstacleBoxes);
-    bobAnimation(enemy, now * (0.7 + (enemy.id.length % 3) * 0.1));
+    tickAnimation(enemy, dt, !!enemy.moveTarget);
   }
+
+  tickAnimation(player, dt, movingFromInput || !!player.moveTarget);
 
   if (player.stats.hp <= 0 && player.alive) {
     player.alive = false;
@@ -307,10 +551,52 @@ function tick() {
     applyHeal(player, player.stats.hpMax, hooks);
   }
 
-  cameraLookAhead.copy(player.position);
-  const camTarget = cameraLookAhead.clone().add(cameraOffset);
-  camera.position.lerp(camTarget, 0.12);
-  camera.lookAt(cameraLookAhead);
+  // movement marker fade
+  if (moveMarker.visible) {
+    moveMarkerLife -= dt;
+    if (moveMarkerLife <= 0) moveMarker.visible = false;
+    else {
+      const m = moveMarker.material as THREE.MeshBasicMaterial;
+      m.opacity = Math.max(0, moveMarkerLife / 0.6) * 0.9;
+      moveMarker.rotation.z += dt * 4;
+    }
+  }
+
+  // target ring follow
+  if (player.attackTarget && player.attackTarget.alive) {
+    targetRing.visible = true;
+    targetRing.position.copy(player.attackTarget.position);
+    targetRing.position.y = 0.05;
+    targetRing.rotation.z += dt * 1.5;
+  } else {
+    targetRing.visible = false;
+  }
+
+  // camera (orbit yaw + zoom + smooth follow + shake)
+  const horiz = cameraDistance * Math.cos(CAM_PITCH);
+  const cy = cameraDistance * Math.sin(CAM_PITCH);
+  _camDesired.set(
+    player.position.x + Math.sin(cameraYaw) * horiz,
+    player.position.y + cy,
+    player.position.z + Math.cos(cameraYaw) * horiz,
+  );
+  camera.position.lerp(_camDesired, 0.15);
+
+  let shakeX = 0,
+    shakeY = 0;
+  if (cameraShakeTime > 0) {
+    cameraShakeTime = Math.max(0, cameraShakeTime - dt);
+    const k = cameraShakeIntensity * (cameraShakeTime > 0 ? 1 : 0);
+    shakeX = (Math.random() - 0.5) * k;
+    shakeY = (Math.random() - 0.5) * k;
+    if (cameraShakeTime <= 0) cameraShakeIntensity = 0;
+  }
+  camera.position.x += shakeX;
+  camera.position.y += shakeY;
+
+  _camTarget.copy(player.position);
+  _camTarget.y += 1;
+  camera.lookAt(_camTarget);
   world.sun.position.copy(player.position).add(new THREE.Vector3(40, 60, 25));
   world.sun.target.position.copy(player.position);
 
@@ -327,18 +613,18 @@ function start() {
   hud.show();
   hud.hideLoading();
   hud.log("Welcome to Chronicle Elfs.", "system");
-  hud.log("Click to move. Click an enemy to attack.", "system");
+  if (isTouch) {
+    hud.log("Joystick: move | tap enemy: target | ⚔ attack", "system");
+  } else {
+    hud.log("WASD/click: move | Tab: next target | 1–5: skills", "system");
+  }
   requestAnimationFrame(tick);
 }
 
-const dummy = new THREE.Vector3();
-camera.position.copy(player.position).add(cameraOffset);
+camera.position.set(
+  player.position.x,
+  cameraDistance * Math.sin(CAM_PITCH),
+  player.position.z + cameraDistance * Math.cos(CAM_PITCH),
+);
 camera.lookAt(player.position);
-void dummy;
-void WORLD_SIZE;
-
-if (document.readyState === "complete") {
-  start();
-} else {
-  window.addEventListener("load", start);
-}
+start();

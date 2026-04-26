@@ -5,6 +5,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Chronicle Elfs" />
     <meta name="theme-color" content="#1a1a2e" />
@@ -71,9 +72,24 @@
         <button data-action="resume">Resume</button>
         <button data-action="reset">Reset Character</button>
         <p class="hint">
-          Click left mouse to move/attack. Right click to deselect.<br />
-          Hotkeys 1-5: skills. Touch: tap to move/target, tap skills.
+          <strong>Mouse:</strong> click to move, click enemy to attack, RMB to
+          deselect, wheel = zoom, hold LMB = continuous move.<br />
+          <strong>Keyboard:</strong> WASD/arrows to move, Tab = next target,
+          Q/E rotate camera, Space = attack, 1–5 = skills, Esc = deselect.<br />
+          <strong>Touch:</strong> left joystick = move, tap enemy = target,
+          right buttons = attack/target/clear, hotbar = skills, pinch = zoom.
         </p>
+      </div>
+
+      <div id="touch-controls">
+        <div id="joystick" class="joy-base">
+          <div id="joystick-knob" class="joy-knob"></div>
+        </div>
+        <div id="action-buttons">
+          <button id="btn-target" class="action-btn" aria-label="Target nearest">⌖</button>
+          <button id="btn-attack" class="action-btn primary" aria-label="Attack">⚔</button>
+          <button id="btn-deselect" class="action-btn" aria-label="Deselect">✕</button>
+        </div>
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>

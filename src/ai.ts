@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { performAttack, type CombatHooks } from "./combat";
+import { startAttackAnim } from "./animation";
 import type { Entity } from "./types";
 
 export function tickEnemyAI(
@@ -32,6 +33,7 @@ export function tickEnemyAI(
     } else {
       enemy.moveTarget = null;
       if (enemy.attackCooldown <= 0) {
+        startAttackAnim(enemy);
         performAttack(enemy, player, hooks);
         enemy.attackCooldown = enemy.stats.attackSpeed;
       }
