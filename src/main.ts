@@ -29,6 +29,18 @@ import { CLASSES, type ClassId } from "./classes";
 import { SKILL_NODES } from "./skilltree";
 import { getSavedClass, showClassSelect, clearSavedClass } from "./ui_classselect";
 import { createSkillTreeUI } from "./ui_skilltree";
+import { Inventory } from "./inventory";
+import { rollDrops, ITEMS, type ItemDef } from "./items";
+import {
+  spawnGroundItem,
+  tickGroundItems,
+  despawnGroundItem,
+  type GroundItem,
+} from "./drops";
+import { tickObelisk, type Settlement } from "./settlements";
+import { createInventoryUI } from "./ui_inventory";
+import { createCraftingUI } from "./ui_crafting";
+import { createTeleportUI, fadeTeleport } from "./ui_teleport";
 
 registerSW({ immediate: true });
 
@@ -105,30 +117,23 @@ function applyClassToPlayer(classId: ClassId) {
 }
 
 const enemies: Entity[] = [];
-const SPAWN_POINTS: Array<{
-  key: keyof typeof ENEMY_TEMPLATES;
-  pos: [number, number];
-}> = [
-  { key: "goblin", pos: [12, 5] },
-  { key: "goblin", pos: [15, -3] },
-  { key: "goblin", pos: [-10, 8] },
-  { key: "goblin", pos: [-14, -2] },
-  { key: "wolf", pos: [22, -12] },
-  { key: "wolf", pos: [-22, 14] },
-  { key: "wolf", pos: [25, 18] },
-  { key: "orc", pos: [30, 0] },
-  { key: "orc", pos: [-32, -8] },
-  { key: "orc", pos: [0, 28] },
-  { key: "goblin", pos: [-18, 22] },
-  { key: "wolf", pos: [-28, -22] },
-];
-for (const sp of SPAWN_POINTS) {
-  const enemy = createEnemy(
-    scene,
-    sp.key,
-    new THREE.Vector3(sp.pos[0], 0, sp.pos[1]),
-  );
-  enemies.push(enemy);
+// Spawn enemies from biome-based zones defined by world
+for (const zone of world.spawnZones) {
+  for (let i = 0; i < zone.count; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const r = Math.random() * zone.radius;
+    const px = zone.center.x + Math.cos(a) * r;
+    const pz = zone.center.z + Math.sin(a) * r;
+    const enemyType = zone.enemies[
+      Math.floor(Math.random() * zone.enemies.length)
+    ];
+    const enemy = createEnemy(
+      scene,
+      enemyType as keyof typeof ENEMY_TEMPLATES,
+      new THREE.Vector3(px, 0, pz),
+    );
+    enemies.push(enemy);
+  }
 }
 
 let skills: Skill[] = [];
@@ -246,6 +251,14 @@ const hooks = {
         vibrate([20, 40, 20]);
       }
       if (player.attackTarget === victim) player.attackTarget = null;
+      // Item drops
+      if (victim.enemyType) {
+        const drops = rollDrops(victim.enemyType);
+        for (const d of drops) {
+          const gi = spawnGroundItem(scene, d.id, d.amount, victim.position);
+          groundItems.push(gi);
+        }
+      }
     } else if (victim === player) {
       hud.log(`You were defeated by ${killer.name}`, "system");
       respawnPlayer();
@@ -341,11 +354,153 @@ const skillTreeUI = createSkillTreeUI(player, (node) => {
 });
 const skillsBtn = document.getElementById("skills-button");
 skillsBtn?.addEventListener("click", () => skillTreeUI.toggle());
-window.addEventListener("keydown", (e) => {
-  if (e.key.toLowerCase() === "k") {
-    skillTreeUI.toggle();
+
+// ---- Inventory ----
+const inventory = new Inventory();
+inventory.add("potion_hp", 3);
+inventory.add("potion_mp", 2);
+
+const groundItems: GroundItem[] = [];
+
+function useItem(def: ItemDef): boolean {
+  const eff = def.effect;
+  if (!eff) return false;
+  if (eff.hp) {
+    const before = player.stats.hp;
+    player.stats.hp = Math.min(player.stats.hpMax, player.stats.hp + eff.hp);
+    hud.log(`Restored ${player.stats.hp - before} HP`, "heal");
   }
+  if (eff.mp) {
+    const before = player.stats.mp;
+    player.stats.mp = Math.min(player.stats.mpMax, player.stats.mp + eff.mp);
+    hud.log(`Restored ${player.stats.mp - before} MP`, "system");
+  }
+  if (eff.attackBonus) {
+    player.stats.attack += eff.attackBonus;
+    hud.log(`+${eff.attackBonus} Attack (permanent)`, "xp");
+  }
+  if (eff.defenseBonus) {
+    player.stats.defense += eff.defenseBonus;
+    hud.log(`+${eff.defenseBonus} Defense (permanent)`, "xp");
+  }
+  if (eff.hpMaxBonus) {
+    player.stats.hpMax += eff.hpMaxBonus;
+    player.stats.hp += eff.hpMaxBonus;
+    hud.log(`+${eff.hpMaxBonus} Max HP (permanent)`, "xp");
+  }
+  if (eff.mpMaxBonus) {
+    player.stats.mpMax += eff.mpMaxBonus;
+    player.stats.mp += eff.mpMaxBonus;
+    hud.log(`+${eff.mpMaxBonus} Max MP (permanent)`, "xp");
+  }
+  hud.setPlayer(player);
+  return true;
+}
+
+const inventoryUI = createInventoryUI({
+  inv: inventory,
+  onUse: useItem,
+  log: (m) => hud.log(m, "system"),
 });
+const craftingUI = createCraftingUI({
+  inv: inventory,
+  log: (m) => hud.log(m, "system"),
+  onCrafted: () => inventoryUI.refresh(),
+});
+const teleportUI = createTeleportUI({
+  settlements: world.settlements,
+  onTeleport: (s) => {
+    fadeTeleport(() => {
+      player.position.set(s.position.x, 0, s.position.z + 4);
+      camera.position.set(
+        player.position.x + 12,
+        camera.position.y,
+        player.position.z + 14,
+      );
+      hud.log(`Teleported to ${s.name}`, "system");
+    });
+  },
+});
+
+const inventoryBtn = document.getElementById("inventory-button");
+inventoryBtn?.addEventListener("click", () => inventoryUI.toggle());
+
+window.addEventListener("keydown", (e) => {
+  if (e.key.toLowerCase() === "k") skillTreeUI.toggle();
+  if (e.key.toLowerCase() === "i") inventoryUI.toggle();
+  if (e.key === "Escape") {
+    inventoryUI.close();
+    craftingUI.close();
+    teleportUI.close();
+  }
+  if (e.key.toLowerCase() === "f") tryInteract();
+});
+
+function findCurrentSettlementId(): string {
+  let nearest = world.settlements[0];
+  let best = Infinity;
+  for (const s of world.settlements) {
+    const d = s.position.distanceTo(player.position);
+    if (d < best) { best = d; nearest = s; }
+  }
+  return nearest.id;
+}
+
+function nearestObelisk(): { settlement: Settlement; distance: number } | null {
+  let best: { settlement: Settlement; distance: number } | null = null;
+  for (const o of world.obelisks) {
+    const d = o.group.position.distanceTo(player.position);
+    if (!best || d < best.distance) best = { settlement: o.settlement, distance: d };
+  }
+  return best;
+}
+
+function tryInteract(): void {
+  const ob = nearestObelisk();
+  if (ob && ob.distance < 4.5) {
+    teleportUI.open(findCurrentSettlementId());
+    return;
+  }
+  if (world.crafterPosition.distanceTo(player.position) < 3.5) {
+    craftingUI.open();
+    return;
+  }
+}
+
+function updateInteractPrompt(): void {
+  const el = document.getElementById("interact-prompt");
+  if (!el) return;
+  const ob = nearestObelisk();
+  if (ob && ob.distance < 4.5) {
+    el.textContent = `[F] Travel — ${ob.settlement.name} Obelisk`;
+    el.classList.remove("hidden");
+    return;
+  }
+  if (world.crafterPosition.distanceTo(player.position) < 3.5) {
+    el.textContent = "[F] Forge & Alchemy";
+    el.classList.remove("hidden");
+    return;
+  }
+  el.classList.add("hidden");
+}
+
+function tryPickupNearby(): void {
+  for (const it of [...groundItems]) {
+    if (it.position.distanceTo(player.position) < 1.6) {
+      if (inventory.add(it.id, it.amount)) {
+        const def = ITEMS[it.id];
+        hud.log(
+          `Picked up ${def?.icon ?? ""} ${def?.name ?? it.id} ×${it.amount}`,
+          "xp",
+        );
+        despawnGroundItem(scene, groundItems, it);
+        if (inventoryUI.isOpen()) inventoryUI.refresh();
+      } else {
+        hud.log("Inventory is full!", "system");
+      }
+    }
+  }
+}
 
 hud.onMenuAction((action) => {
   if (action === "reset") {
@@ -642,6 +797,13 @@ function tick() {
       moveMarker.rotation.z += dt * 4;
     }
   }
+
+  // ground items, obelisks, auto-pickup, interact prompt
+  const t = performance.now() / 1000;
+  tickGroundItems(groundItems, t);
+  for (const o of world.obelisks) tickObelisk(o, t);
+  tryPickupNearby();
+  updateInteractPrompt();
 
   // target ring follow
   if (player.attackTarget && player.attackTarget.alive) {

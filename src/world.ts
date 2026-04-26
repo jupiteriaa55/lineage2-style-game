@@ -7,7 +7,14 @@ import {
   makeMarbleTexture,
 } from "./textures";
 
-export const WORLD_SIZE = 200;
+export const WORLD_SIZE = 400;
+
+import {
+  SETTLEMENTS,
+  buildSettlement,
+  type ObeliskHandle,
+  type Settlement,
+} from "./settlements";
 
 export interface World {
   scene: THREE.Scene;
@@ -15,6 +22,19 @@ export interface World {
   obstacles: THREE.Object3D[];
   obstacleBoxes: THREE.Box3[];
   sun: THREE.DirectionalLight;
+  obelisks: ObeliskHandle[];
+  settlements: Settlement[];
+  crafterPosition: THREE.Vector3;
+  spawnZones: SpawnZone[];
+}
+
+export interface SpawnZone {
+  center: THREE.Vector3;
+  radius: number;
+  /** weighted enemy types that may appear here */
+  enemies: Array<"goblin" | "wolf" | "orc">;
+  /** scaling: how dense */
+  count: number;
 }
 
 const SHARED_BARK = makeBarkTexture(512);
@@ -166,9 +186,9 @@ function buildBrokenWall(rng: () => number): THREE.Group {
 export function createWorld(): World {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x6b8db8);
-  scene.fog = new THREE.Fog(0x6b8db8, 70, 200);
+  scene.fog = new THREE.Fog(0x6b8db8, 90, 320);
 
-  const groundGeo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, 96, 96);
+  const groundGeo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, 144, 144);
   const positions = groundGeo.attributes.position;
   for (let i = 0; i < positions.count; i++) {
     const x = positions.getX(i);
@@ -193,8 +213,6 @@ export function createWorld(): World {
   scene.add(ground);
 
   const cobble = makeCobblestoneTexture(1024);
-  cobble.map.repeat.set(2, 0.5);
-  cobble.normalMap.repeat.set(2, 0.5);
   const pathMat = new THREE.MeshStandardMaterial({
     map: cobble.map,
     normalMap: cobble.normalMap,
@@ -204,33 +222,30 @@ export function createWorld(): World {
     opacity: 0.96,
   });
 
-  for (let i = 0; i < 3; i++) {
-    const angle = (i / 3) * Math.PI * 2;
+  // paths between starter town (Eldoria) and the three villages
+  function buildPath(from: THREE.Vector3, to: THREE.Vector3): void {
+    const dir = new THREE.Vector3().subVectors(to, from);
+    const length = dir.length() - 24; // leave gaps near plazas
+    if (length <= 4) return;
+    dir.normalize();
     const path = new THREE.Mesh(
-      new THREE.PlaneGeometry(40, 3.5, 1, 1),
-      pathMat,
+      new THREE.PlaneGeometry(length, 3.6, 1, 1),
+      pathMat.clone(),
     );
+    (path.material as THREE.MeshStandardMaterial).map!.repeat.set(length / 3, 1);
+    (path.material as THREE.MeshStandardMaterial).normalMap!.repeat.set(length / 3, 1);
     path.rotation.x = -Math.PI / 2;
-    path.rotation.z = angle;
-    path.position.set(Math.cos(angle) * 16, 0.02, Math.sin(angle) * 16);
+    path.rotation.z = -Math.atan2(dir.z, dir.x);
+    const mid = from.clone().add(to).multiplyScalar(0.5);
+    path.position.set(mid.x, 0.02, mid.z);
     path.receiveShadow = true;
     scene.add(path);
   }
-
-  // central plaza marble disc
-  const plazaMat = new THREE.MeshStandardMaterial({
-    map: SHARED_MARBLE,
-    roughness: 0.35,
-    metalness: 0.1,
-  });
-  const plaza = new THREE.Mesh(
-    new THREE.CircleGeometry(5, 48),
-    plazaMat,
-  );
-  plaza.rotation.x = -Math.PI / 2;
-  plaza.position.y = 0.025;
-  plaza.receiveShadow = true;
-  scene.add(plaza);
+  // Eldoria is at origin; connect to each other town
+  for (const s of SETTLEMENTS) {
+    if (s.starter) continue;
+    buildPath(new THREE.Vector3(0, 0, 0), s.position.clone());
+  }
 
   const ambient = new THREE.AmbientLight(0xc8d4e8, 0.6);
   scene.add(ambient);
@@ -259,12 +274,32 @@ export function createWorld(): World {
   const half = WORLD_SIZE / 2 - 5;
   const rng = mulberry32(1337);
 
-  for (let i = 0; i < 90; i++) {
+  // settlement footprints — keep clear of nature
+  const settlementCenters = SETTLEMENTS.map((s) => s.position.clone());
+  function nearAnySettlement(p: THREE.Vector3, dist: number): boolean {
+    for (const c of settlementCenters) {
+      if (c.distanceTo(p) < dist) return true;
+    }
+    return false;
+  }
+  // also keep paths clear (a thin corridor along each path)
+  function nearAnyPath(p: THREE.Vector3, dist: number): boolean {
+    for (const s of SETTLEMENTS) {
+      if (s.starter) continue;
+      const a = new THREE.Vector3(0, 0, 0);
+      const b = s.position.clone();
+      const ab = new THREE.Vector3().subVectors(b, a);
+      const t = THREE.MathUtils.clamp(p.clone().sub(a).dot(ab) / ab.lengthSq(), 0, 1);
+      const proj = a.clone().add(ab.multiplyScalar(t));
+      if (proj.distanceTo(p) < dist) return true;
+    }
+    return false;
+  }
+
+  for (let i = 0; i < 360; i++) {
     const tree = buildTree(rng);
     tree.position.set((rng() * 2 - 1) * half, 0, (rng() * 2 - 1) * half);
-    if (tree.position.length() < 14) {
-      tree.position.normalize().multiplyScalar(14 + rng() * 6);
-    }
+    if (nearAnySettlement(tree.position, 26) || nearAnyPath(tree.position, 4)) continue;
     tree.scale.setScalar(0.85 + rng() * 0.7);
     tree.rotation.y = rng() * Math.PI * 2;
     scene.add(tree);
@@ -277,9 +312,10 @@ export function createWorld(): World {
     );
   }
 
-  for (let i = 0; i < 70; i++) {
+  for (let i = 0; i < 220; i++) {
     const rock = buildRock(rng);
     rock.position.set((rng() * 2 - 1) * half, 0.3, (rng() * 2 - 1) * half);
+    if (nearAnySettlement(rock.position, 24) || nearAnyPath(rock.position, 3)) continue;
     rock.scale.setScalar(0.6 + rng() * 1.4);
     scene.add(rock);
     obstacles.push(rock);
@@ -291,20 +327,22 @@ export function createWorld(): World {
     );
   }
 
-  for (let i = 0; i < 50; i++) {
+  for (let i = 0; i < 180; i++) {
     const bush = buildBush(rng);
     bush.position.set((rng() * 2 - 1) * half, 0, (rng() * 2 - 1) * half);
+    if (nearAnySettlement(bush.position, 22)) continue;
     bush.scale.setScalar(0.7 + rng() * 0.6);
     scene.add(bush);
   }
 
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 26; i++) {
     const pillar = buildRuinPillar(rng);
     pillar.position.set(
-      (rng() * 2 - 1) * half * 0.7,
+      (rng() * 2 - 1) * half * 0.85,
       0,
-      (rng() * 2 - 1) * half * 0.7,
+      (rng() * 2 - 1) * half * 0.85,
     );
+    if (nearAnySettlement(pillar.position, 28) || nearAnyPath(pillar.position, 4)) continue;
     scene.add(pillar);
     obstacles.push(pillar);
     obstacleBoxes.push(
@@ -315,13 +353,14 @@ export function createWorld(): World {
     );
   }
 
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 18; i++) {
     const wall = buildBrokenWall(rng);
     wall.position.set(
-      (rng() * 2 - 1) * half * 0.6,
+      (rng() * 2 - 1) * half * 0.85,
       0,
-      (rng() * 2 - 1) * half * 0.6,
+      (rng() * 2 - 1) * half * 0.85,
     );
+    if (nearAnySettlement(wall.position, 28) || nearAnyPath(wall.position, 4)) continue;
     scene.add(wall);
     obstacles.push(wall);
     obstacleBoxes.push(
@@ -332,7 +371,79 @@ export function createWorld(): World {
     );
   }
 
-  return { scene, ground, obstacles, obstacleBoxes, sun };
+  // ---------- Build settlements ----------
+  const obelisks: ObeliskHandle[] = [];
+  let crafterPosition = new THREE.Vector3(6, 0, 4);
+  for (const s of SETTLEMENTS) {
+    const built = buildSettlement(scene, s, rng);
+    obelisks.push(built.obelisk);
+    for (const o of built.obstacles) {
+      obstacles.push(o.obj);
+      obstacleBoxes.push(o.box);
+    }
+    if (built.crafterPosition) crafterPosition = built.crafterPosition;
+  }
+
+  // ---------- Spawn zones (away from settlements) ----------
+  const spawnZones: SpawnZone[] = [
+    // Around starter town: low-level goblins & wolves
+    {
+      center: new THREE.Vector3(40, 0, 40),
+      radius: 30,
+      enemies: ["goblin", "goblin", "wolf"],
+      count: 8,
+    },
+    {
+      center: new THREE.Vector3(-40, 0, 40),
+      radius: 30,
+      enemies: ["goblin", "wolf"],
+      count: 6,
+    },
+    // Mid biomes
+    {
+      center: new THREE.Vector3(80, 0, -60),
+      radius: 30,
+      enemies: ["wolf", "orc"],
+      count: 7,
+    },
+    {
+      center: new THREE.Vector3(-80, 0, -60),
+      radius: 30,
+      enemies: ["goblin", "orc"],
+      count: 7,
+    },
+    // Far zones near villages — tougher
+    {
+      center: new THREE.Vector3(0, 0, -100),
+      radius: 35,
+      enemies: ["orc", "wolf", "wolf"],
+      count: 9,
+    },
+    {
+      center: new THREE.Vector3(110, 0, -50),
+      radius: 30,
+      enemies: ["orc", "orc", "wolf"],
+      count: 8,
+    },
+    {
+      center: new THREE.Vector3(-110, 0, -50),
+      radius: 30,
+      enemies: ["orc", "goblin"],
+      count: 7,
+    },
+  ];
+
+  return {
+    scene,
+    ground,
+    obstacles,
+    obstacleBoxes,
+    sun,
+    obelisks,
+    settlements: SETTLEMENTS,
+    crafterPosition,
+    spawnZones,
+  };
 }
 
 function mulberry32(seed: number): () => number {

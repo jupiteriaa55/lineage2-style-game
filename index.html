@@ -34,6 +34,42 @@
       </div>
     </div>
 
+    <div id="teleport-fade"></div>
+    <div id="inventory-panel" class="hidden">
+      <div class="iv-panel">
+        <div class="iv-header">
+          <h2>Inventory</h2>
+          <div class="iv-cap"><span id="iv-cap-text">0 / 30</span></div>
+          <button class="iv-close" id="iv-close">×</button>
+        </div>
+        <div id="iv-grid"></div>
+        <div class="iv-info" id="iv-info">Click an item for details. Right-click to use.</div>
+      </div>
+    </div>
+
+    <div id="craft-panel" class="hidden">
+      <div class="iv-panel">
+        <div class="iv-header">
+          <h2>Forge & Alchemy</h2>
+          <button class="iv-close" id="craft-close">×</button>
+        </div>
+        <div id="craft-list"></div>
+        <div class="iv-info" id="craft-info">
+          Visit the anvil in Eldoria to craft potions and amulets.
+        </div>
+      </div>
+    </div>
+
+    <div id="teleport-panel" class="hidden">
+      <div class="iv-panel teleport">
+        <div class="iv-header">
+          <h2>Obelisk of Travel</h2>
+          <button class="iv-close" id="tp-close">×</button>
+        </div>
+        <div id="tp-list"></div>
+      </div>
+    </div>
+
     <div id="skilltree-panel" class="hidden">
       <div class="st-panel">
         <div class="st-header">
@@ -93,8 +129,10 @@
         </div>
       </div>
 
+      <button id="inventory-button" aria-label="Inventory">🎒</button>
       <button id="skills-button" aria-label="Skills">✦</button>
       <button id="menu-button" aria-label="Menu">≡</button>
+      <div id="interact-prompt" class="hidden"></div>
       <div id="menu-panel" class="hidden">
         <h2>Menu</h2>
         <button data-action="resume">Resume</button>

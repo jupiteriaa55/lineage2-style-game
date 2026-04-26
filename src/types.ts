@@ -72,8 +72,15 @@ export interface Entity {
   attackTarget: Entity | null;
   attackCooldown: number;
   alive: boolean;
+  /** ENEMY_TEMPLATES key (goblin/wolf/orc) for drop tables */
+  enemyType?: string;
   respawn?: { at: number; spawn: THREE.Vector3 };
-  hpBar?: { bg: THREE.Sprite; fill: THREE.Sprite };
+  hpBar?: {
+    bg: THREE.Sprite;
+    fill: THREE.Sprite;
+    fillCanvas: HTMLCanvasElement;
+    fillTex: THREE.CanvasTexture;
+  };
   ai?: AIState;
   rig?: EntityRig;
   anim?: AnimController;

@@ -16,7 +16,15 @@ import {
 
 let nextId = 1;
 
-function makeHpBarSprite(): { bg: THREE.Sprite; fill: THREE.Sprite } {
+interface HpBarHandles {
+  bg: THREE.Sprite;
+  fill: THREE.Sprite;
+  /** stored on the sprite for fast access during HP updates */
+  fillCanvas: HTMLCanvasElement;
+  fillTex: THREE.CanvasTexture;
+}
+
+function makeHpBarSprite(): HpBarHandles {
   const bgCanvas = document.createElement("canvas");
   bgCanvas.width = 64;
   bgCanvas.height = 8;
@@ -41,26 +49,46 @@ function makeHpBarSprite(): { bg: THREE.Sprite; fill: THREE.Sprite } {
   const fillCanvas = document.createElement("canvas");
   fillCanvas.width = 62;
   fillCanvas.height = 6;
-  const fctx = fillCanvas.getContext("2d")!;
-  const grad = fctx.createLinearGradient(0, 0, 0, 6);
-  grad.addColorStop(0, "#ff7878");
-  grad.addColorStop(1, "#a82525");
-  fctx.fillStyle = grad;
-  fctx.fillRect(0, 0, 62, 6);
+  drawHpBarFill(fillCanvas, 1);
   const fillTex = new THREE.CanvasTexture(fillCanvas);
   fillTex.colorSpace = THREE.SRGBColorSpace;
+  fillTex.minFilter = THREE.NearestFilter;
+  fillTex.magFilter = THREE.NearestFilter;
   const fillMat = new THREE.SpriteMaterial({
     map: fillTex,
     depthTest: false,
     transparent: true,
   });
   const fill = new THREE.Sprite(fillMat);
+  // bar slightly inset from frame
   fill.scale.set(1.94, 0.18, 1);
-  fill.center.set(0, 0.5);
-  fill.position.x = -0.97;
   fill.renderOrder = 1000;
 
-  return { bg, fill };
+  return { bg, fill, fillCanvas, fillTex };
+}
+
+function drawHpBarFill(canvas: HTMLCanvasElement, pct: number): void {
+  const ctx = canvas.getContext("2d")!;
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  const fillW = Math.max(0, Math.min(1, pct)) * w;
+  if (fillW <= 0) return;
+  // bar gradient that depends on hp pct: green→yellow→red
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  if (pct > 0.5) {
+    grad.addColorStop(0, "#ff8a8a");
+    grad.addColorStop(1, "#a82525");
+  } else if (pct > 0.25) {
+    grad.addColorStop(0, "#ffd07a");
+    grad.addColorStop(1, "#a87025");
+  } else {
+    grad.addColorStop(0, "#ff5050");
+    grad.addColorStop(1, "#801010");
+  }
+  ctx.fillStyle = grad;
+  // bar starts at left, fills proportional width
+  ctx.fillRect(0, 0, fillW, h);
 }
 
 interface HumanoidPalette {
@@ -486,7 +514,8 @@ export function createEnemy(
 
   const hpBar = makeHpBarSprite();
   hpBar.bg.position.set(0, 2.9, 0);
-  hpBar.fill.position.set(-0.97, 2.9, 0);
+  // both bars centered at the same x: avoids drifting when entity rotates
+  hpBar.fill.position.set(0, 2.9, 0);
   group.add(hpBar.bg);
   group.add(hpBar.fill);
 
@@ -512,6 +541,7 @@ export function createEnemy(
     attackTarget: null,
     attackCooldown: 0,
     alive: true,
+    enemyType: templateKey as string,
     hpBar,
     ai,
     respawn: { at: 0, spawn: spawn.clone() },
@@ -533,5 +563,6 @@ export function getXpReward(e: Entity): number {
 export function updateHpBar(e: Entity): void {
   if (!e.hpBar) return;
   const pct = Math.max(0, Math.min(1, e.stats.hp / e.stats.hpMax));
-  e.hpBar.fill.scale.x = 1.94 * pct;
+  drawHpBarFill(e.hpBar.fillCanvas, pct);
+  e.hpBar.fillTex.needsUpdate = true;
 }

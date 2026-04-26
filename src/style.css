@@ -913,3 +913,202 @@ body.touch #touch-controls {
   border-radius: 50%;
   box-shadow: 0 0 6px #ff6464;
 }
+
+/* ---------- Inventory / Craft / Teleport ---------- */
+#inventory-panel, #craft-panel, #teleport-panel {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 4, 8, 0.85);
+  z-index: 1300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.iv-panel {
+  width: min(720px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  background: linear-gradient(180deg, #1a1410 0%, #0d0a08 100%);
+  border: 2px solid var(--frame-border);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+.iv-panel.teleport { width: min(520px, 100%); }
+.iv-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-bottom: 1px solid #3a2818;
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+}
+.iv-header h2 {
+  flex: 1;
+  font-family: Georgia, serif;
+  color: var(--gold-bright);
+  letter-spacing: 1px;
+}
+.iv-cap {
+  background: rgba(60, 42, 18, 0.6);
+  border: 1px solid var(--gold);
+  border-radius: 4px;
+  padding: 4px 10px;
+  color: var(--gold-bright);
+  font-size: 12px;
+}
+.iv-close {
+  background: none;
+  border: 1px solid #5a4823;
+  color: var(--gold);
+  font-size: 18px;
+  width: 30px;
+  height: 30px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.iv-close:hover { background: rgba(60, 42, 18, 0.6); }
+
+#iv-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.iv-cell {
+  aspect-ratio: 1 / 1;
+  background: rgba(20, 14, 8, 0.85);
+  border: 2px solid #3a2818;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  transition: border-color 0.15s, background 0.15s;
+}
+.iv-cell:hover { border-color: var(--gold); }
+.iv-cell.selected { border-color: var(--gold-bright); box-shadow: 0 0 8px rgba(245,217,122,0.4); }
+.iv-cell.empty { opacity: 0.45; cursor: default; }
+.iv-cell .iv-icon { font-size: 26px; }
+.iv-cell .iv-amt {
+  position: absolute;
+  bottom: 2px;
+  right: 4px;
+  font-size: 11px;
+  color: var(--gold-bright);
+  font-weight: bold;
+  text-shadow: 0 0 3px #000;
+}
+.iv-info {
+  background: rgba(0,0,0,0.45);
+  border: 1px solid #3a2818;
+  border-radius: 4px;
+  padding: 10px 12px;
+  color: #d8d0b8;
+  font-size: 12px;
+  line-height: 1.5;
+  min-height: 64px;
+}
+
+#craft-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.craft-row {
+  background: rgba(20, 14, 8, 0.85);
+  border: 1px solid #3a2818;
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.craft-row.ready { border-color: var(--gold); }
+.craft-row.ready:hover { background: rgba(40, 28, 14, 0.85); }
+.craft-row .craft-icon { font-size: 28px; width: 36px; text-align: center; }
+.craft-row .craft-meta { flex: 1; }
+.craft-row .craft-name { color: var(--gold); font-weight: bold; }
+.craft-row .craft-cost { color: #948568; font-size: 11px; margin-top: 2px; }
+.craft-row .craft-btn {
+  background: linear-gradient(180deg, #6a4a18 0%, #3e2a0c 100%);
+  color: var(--gold-bright);
+  border: 1px solid var(--gold);
+  border-radius: 4px;
+  padding: 6px 14px;
+  font-weight: bold;
+  cursor: pointer;
+  font-size: 12px;
+}
+.craft-row .craft-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+#tp-list { display: flex; flex-direction: column; gap: 8px; }
+.tp-row {
+  background: rgba(20, 14, 8, 0.85);
+  border: 1px solid #3a2818;
+  border-radius: 6px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.tp-row:hover { border-color: var(--gold); background: rgba(40, 28, 14, 0.85); }
+.tp-row.current {
+  border-color: var(--gold-bright);
+  cursor: default;
+  opacity: 0.7;
+}
+.tp-row .tp-icon { font-size: 22px; color: var(--gold-bright); }
+.tp-row .tp-meta { flex: 1; }
+.tp-row .tp-name { color: var(--gold); font-weight: bold; }
+.tp-row .tp-desc { color: #948568; font-size: 11px; margin-top: 2px; }
+
+/* Inventory button next to skills */
+#inventory-button {
+  position: fixed;
+  top: 14px;
+  right: 114px;
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(180deg, #5a3a18 0%, #2e1c0a 100%);
+  color: var(--gold-bright);
+  border: 1px solid var(--gold);
+  border-radius: 6px;
+  font-size: 18px;
+  cursor: pointer;
+  z-index: 30;
+}
+#inventory-button:hover { filter: brightness(1.2); }
+
+/* Interact prompt (shown when near obelisk/anvil) */
+#interact-prompt {
+  position: fixed;
+  bottom: 30%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 18px;
+  background: rgba(20, 14, 8, 0.92);
+  border: 1px solid var(--gold);
+  border-radius: 6px;
+  color: var(--gold-bright);
+  font-size: 13px;
+  z-index: 25;
+  pointer-events: none;
+  letter-spacing: 1px;
+  box-shadow: 0 0 14px rgba(0,0,0,0.6);
+}
+
+/* Teleport fade overlay */
+#teleport-fade {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 1600;
+  transition: opacity 0.4s ease;
+}
+#teleport-fade.visible { opacity: 1; }
