@@ -13,7 +13,7 @@ export interface HUD {
   hideLoading(): void;
   drawMinimap(player: Entity, enemies: Entity[]): void;
   onSkillClick(handler: (index: number) => void): void;
-  onMenuAction(handler: (action: "resume" | "reset") => void): void;
+  onMenuAction(handler: (action: "resume" | "reset" | "save") => void): void;
 }
 
 export function createHUD(): HUD {
@@ -46,7 +46,7 @@ export function createHUD(): HUD {
   const menuPanel = document.getElementById("menu-panel") as HTMLElement;
 
   let skillClickHandler: (index: number) => void = () => {};
-  let menuActionHandler: (action: "resume" | "reset") => void = () => {};
+  let menuActionHandler: (action: "resume" | "reset" | "save") => void = () => {};
 
   let skillSlots: HTMLElement[] = [];
 
@@ -78,7 +78,7 @@ export function createHUD(): HUD {
   menuPanel.querySelectorAll<HTMLButtonElement>("button[data-action]").forEach(
     (btn) => {
       btn.addEventListener("click", () => {
-        const action = btn.dataset.action as "resume" | "reset";
+        const action = btn.dataset.action as "resume" | "reset" | "save";
         menuPanel.classList.add("hidden");
         menuActionHandler(action);
       });

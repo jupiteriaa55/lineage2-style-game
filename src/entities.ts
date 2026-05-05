@@ -1,5 +1,13 @@
 import * as THREE from "three";
-import type { AIState, Entity, Stats } from "./types";
+import type {
+  AIState,
+  Entity,
+  MobTemplate,
+  RaceDef,
+  Stats,
+} from "./types";
+import { buildRaceMesh } from "./races";
+import { getMob, getMobName } from "./mobs";
 
 let nextId = 1;
 
@@ -47,17 +55,19 @@ function makeHpBarSprite(): { bg: THREE.Sprite; fill: THREE.Sprite } {
 }
 
 function buildHumanoidMesh(palette: {
-  body: number;
+  primary: number;
   accent: number;
-  head: number;
+  cloth?: number;
 }): THREE.Group {
   const g = new THREE.Group();
 
-  const bodyMat = new THREE.MeshLambertMaterial({ color: palette.body });
+  const bodyMat = new THREE.MeshLambertMaterial({ color: palette.primary });
   const accentMat = new THREE.MeshLambertMaterial({ color: palette.accent });
-  const headMat = new THREE.MeshLambertMaterial({ color: palette.head });
+  const clothMat = new THREE.MeshLambertMaterial({
+    color: palette.cloth ?? palette.accent,
+  });
 
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.0, 0.5), bodyMat);
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.0, 0.5), clothMat);
   torso.position.y = 1.2;
   torso.castShadow = true;
   g.add(torso);
@@ -85,7 +95,7 @@ function buildHumanoidMesh(palette: {
   armR.position.x = 0.55;
   g.add(armR);
 
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.55), headMat);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.55), bodyMat);
   head.position.y = 2.0;
   head.castShadow = true;
   g.add(head);
@@ -97,6 +107,43 @@ function buildHumanoidMesh(palette: {
   facing.position.set(0, 2.05, 0.3);
   g.add(facing);
 
+  return g;
+}
+
+function buildQuadrupedMesh(palette: {
+  primary: number;
+  accent: number;
+}): THREE.Group {
+  const g = new THREE.Group();
+  const bodyMat = new THREE.MeshLambertMaterial({ color: palette.primary });
+  const accentMat = new THREE.MeshLambertMaterial({ color: palette.accent });
+
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.7, 0.7), bodyMat);
+  body.position.y = 0.85;
+  body.castShadow = true;
+  g.add(body);
+
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.45, 0.5), bodyMat);
+  head.position.set(0.85, 1.05, 0);
+  head.castShadow = true;
+  g.add(head);
+
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.18, 0.18), bodyMat);
+  tail.position.set(-0.95, 0.95, 0);
+  tail.castShadow = true;
+  g.add(tail);
+
+  for (const sx of [-0.5, 0.55]) {
+    for (const sz of [-0.25, 0.25]) {
+      const leg = new THREE.Mesh(
+        new THREE.BoxGeometry(0.18, 0.6, 0.18),
+        accentMat,
+      );
+      leg.position.set(sx, 0.3, sz);
+      leg.castShadow = true;
+      g.add(leg);
+    }
+  }
   return g;
 }
 
@@ -113,11 +160,20 @@ function defaultStats(): Stats {
   };
 }
 
-export function createPlayer(scene: THREE.Scene): Entity {
-  const group = buildHumanoidMesh({
-    body: 0x3a5e9e,
+export interface PlayerCreateOptions {
+  race: RaceDef;
+  name: string;
+  baseStats: Stats;
+}
+
+export function createPlayer(
+  scene: THREE.Scene,
+  opts?: PlayerCreateOptions,
+): Entity {
+  const group = opts ? buildRaceMesh(opts.race) : buildHumanoidMesh({
+    primary: 0xddc7a8,
     accent: 0x6e4a1e,
-    head: 0xddc7a8,
+    cloth: 0x3a5e9e,
   });
 
   const cape = new THREE.Mesh(
@@ -152,18 +208,20 @@ export function createPlayer(scene: THREE.Scene): Entity {
 
   scene.add(group);
 
-  const stats = defaultStats();
-  stats.hp = 200;
-  stats.hpMax = 200;
-  stats.mp = 100;
-  stats.mpMax = 100;
-  stats.attack = 18;
-  stats.defense = 6;
+  const stats = opts?.baseStats ?? defaultStats();
+  if (!opts) {
+    stats.hp = 200;
+    stats.hpMax = 200;
+    stats.mp = 100;
+    stats.mpMax = 100;
+    stats.attack = 18;
+    stats.defense = 6;
+  }
 
   const e: Entity = {
     id: `player-${nextId++}`,
     kind: "player",
-    name: "Adventurer",
+    name: opts?.name ?? "Adventurer",
     level: 1,
     stats,
     group,
@@ -178,100 +236,61 @@ export function createPlayer(scene: THREE.Scene): Entity {
   return e;
 }
 
-export interface EnemyTemplate {
-  name: string;
-  level: number;
-  palette: { body: number; accent: number; head: number };
-  scale: number;
-  stats: Stats;
-  xpReward: number;
+/* ---------------- Mobs ---------------- */
+
+export const ENEMY_TEMPLATES: Record<string, { name: string; level: number }> =
+  {};
+
+function statsFromMob(t: MobTemplate): Stats {
+  const base = defaultStats();
+  return {
+    hp: t.stats.hpMax ?? base.hpMax,
+    hpMax: t.stats.hpMax ?? base.hpMax,
+    mp: 0,
+    mpMax: 0,
+    attack: t.stats.attack ?? base.attack,
+    defense: t.stats.defense ?? base.defense,
+    attackRange: t.stats.attackRange ?? base.attackRange,
+    attackSpeed: t.stats.attackSpeed ?? base.attackSpeed,
+  };
 }
 
-export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
-  goblin: {
-    name: "Goblin Scout",
-    level: 2,
-    palette: { body: 0x5a7a32, accent: 0x382818, head: 0x6b8a3a },
-    scale: 0.85,
-    stats: {
-      hp: 45,
-      hpMax: 45,
-      mp: 0,
-      mpMax: 0,
-      attack: 8,
-      defense: 2,
-      attackRange: 1.6,
-      attackSpeed: 1.4,
-    },
-    xpReward: 30,
-  },
-  orc: {
-    name: "Orc Warrior",
-    level: 5,
-    palette: { body: 0x4a3a28, accent: 0x2a1a0a, head: 0x8a6a3a },
-    scale: 1.1,
-    stats: {
-      hp: 110,
-      hpMax: 110,
-      mp: 0,
-      mpMax: 0,
-      attack: 16,
-      defense: 5,
-      attackRange: 1.9,
-      attackSpeed: 2.0,
-    },
-    xpReward: 80,
-  },
-  wolf: {
-    name: "Dire Wolf",
-    level: 3,
-    palette: { body: 0x40342a, accent: 0x281e16, head: 0x40342a },
-    scale: 0.9,
-    stats: {
-      hp: 65,
-      hpMax: 65,
-      mp: 0,
-      mpMax: 0,
-      attack: 12,
-      defense: 2,
-      attackRange: 1.6,
-      attackSpeed: 1.1,
-    },
-    xpReward: 45,
-  },
-};
-
-export function createEnemy(
+export function createMob(
   scene: THREE.Scene,
-  templateKey: keyof typeof ENEMY_TEMPLATES,
+  mobId: string,
   spawn: THREE.Vector3,
-): Entity {
-  const template = ENEMY_TEMPLATES[templateKey];
-  const group = buildHumanoidMesh(template.palette);
-  group.scale.setScalar(template.scale);
+): Entity | null {
+  const t = getMob(mobId);
+  if (!t) return null;
+  const group =
+    t.mesh === "quadruped"
+      ? buildQuadrupedMesh(t.palette)
+      : buildHumanoidMesh(t.palette);
+  group.scale.setScalar(t.scale);
   group.position.copy(spawn);
   scene.add(group);
 
   const hpBar = makeHpBarSprite();
-  hpBar.bg.position.set(0, 2.8 * template.scale, 0);
-  hpBar.fill.position.set(-0.97, 2.8 * template.scale, 0);
+  const headY = (t.mesh === "quadruped" ? 1.6 : 2.7) * t.scale;
+  hpBar.bg.position.set(0, headY, 0);
+  hpBar.fill.position.set(-0.97, headY, 0);
   group.add(hpBar.bg);
   group.add(hpBar.fill);
 
   const ai: AIState = {
     spawn: spawn.clone(),
-    aggroRange: 8,
-    leashRange: 18,
-    patrolRadius: 5,
+    aggroRange: 9,
+    leashRange: 22,
+    patrolRadius: 6,
     nextPatrolAt: 0,
   };
 
   const e: Entity = {
-    id: `${templateKey}-${nextId++}`,
+    id: `${mobId}-${nextId++}`,
     kind: "enemy",
-    name: template.name,
-    level: template.level,
-    stats: { ...template.stats },
+    name: getMobName(mobId),
+    level: t.level,
+    stats: statsFromMob(t),
     group,
     position: group.position,
     velocity: new THREE.Vector3(),
@@ -283,14 +302,50 @@ export function createEnemy(
     hpBar,
     ai,
     respawn: { at: 0, spawn: spawn.clone() },
+    mobKind: mobId,
   };
   return e;
 }
 
-export function getXpReward(e: Entity): number {
-  for (const key in ENEMY_TEMPLATES) {
-    if (e.name === ENEMY_TEMPLATES[key].name) return ENEMY_TEMPLATES[key].xpReward;
-  }
+/** Build a simple bot-player mesh visible on the world map. */
+export function createBotPlayer(
+  scene: THREE.Scene,
+  spawn: THREE.Vector3,
+  color: number,
+  name: string,
+  level: number,
+): Entity {
+  const group = buildHumanoidMesh({
+    primary: 0xe0c8a0,
+    accent: 0x4a3a28,
+    cloth: color,
+  });
+  group.position.copy(spawn);
+  scene.add(group);
+
+  const stats = defaultStats();
+  stats.hp = 60 + level * 8;
+  stats.hpMax = stats.hp;
+
+  const e: Entity = {
+    id: `bot-${nextId++}`,
+    kind: "npc",
+    name,
+    level,
+    stats,
+    group,
+    position: group.position,
+    velocity: new THREE.Vector3(),
+    target: null,
+    moveTarget: null,
+    attackTarget: null,
+    attackCooldown: 0,
+    alive: true,
+  };
+  return e;
+}
+
+export function getXpReward(_e: Entity): number {
   return 20;
 }
 
