@@ -1,4 +1,5 @@
-import { ITEMS, getItem, rarityColor } from "./items";
+import { ITEMS, getItem, rarityColor, getItemName, getItemDesc } from "./items";
+import { t } from "./i18n";
 import {
   addItem,
   countItem,
@@ -9,10 +10,11 @@ import {
 } from "./inventory";
 import { canCraft, performCraft, RECIPE_LIST } from "./crafting";
 import { LOOTBOXES, openLootbox } from "./lootbox";
-import { BUILDING_LIST, BUILDINGS } from "./buildings";
-import { QUEST_LIST, getQuest } from "./quests";
-import { getNPC } from "./npcs";
-import { getCity } from "./cities";
+import { BUILDING_LIST, BUILDINGS, getBuildingName, getBuildingDesc } from "./buildings";
+import { QUEST_LIST, getQuest, getQuestName, getQuestDesc } from "./quests";
+import { getNPC, getNPCName } from "./npcs";
+import { getCity, getCityName } from "./cities";
+import { getMobName } from "./mobs";
 import type {
   BuildingKind,
   EquipSlot,
@@ -74,7 +76,7 @@ export function createPanels(
             <div class="inv-icon" style="color:${rarityColor(def.rarity)}">${def.icon}</div>
             ${slot.count > 1 ? `<div class="inv-count">${slot.count}</div>` : ""}
           `;
-          cell.title = `${def.name}\n${def.description}`;
+          cell.title = `${getItemName(def)}\n${getItemDesc(def)}`;
           cell.addEventListener("click", () => onSlotClick(i));
         }
       }
@@ -101,7 +103,7 @@ export function createPanels(
         const def = getItem(id);
         if (def) {
           cell.innerHTML = `${label}<div class="inv-icon" style="color:${rarityColor(def.rarity)}">${def.icon}</div>`;
-          cell.title = `${def.name}\n${def.description}`;
+          cell.title = `${getItemName(def)}\n${getItemDesc(def)}`;
           cell.addEventListener("click", () => {
             unequip(inv, slot);
             paintInventory();
@@ -115,12 +117,12 @@ export function createPanels(
 
     const bonus = equipmentBonuses(inv);
     invStats.innerHTML = `
-      <div><b>Gold:</b> ${profile.gold}</div>
-      <div><b>Level:</b> ${profile.level}</div>
-      <div><b>Atk Bonus:</b> +${bonus.attack ?? 0}</div>
-      <div><b>Def Bonus:</b> +${bonus.defense ?? 0}</div>
-      <div><b>HP Bonus:</b> +${bonus.hpMax ?? 0}</div>
-      <div><b>MP Bonus:</b> +${bonus.mpMax ?? 0}</div>
+      <div><b>${t("hud.gold")}:</b> ${profile.gold}</div>
+      <div><b>${t("common.lvl")}</b> ${profile.level}</div>
+      <div><b>+Atk:</b> +${bonus.attack ?? 0}</div>
+      <div><b>+Def:</b> +${bonus.defense ?? 0}</div>
+      <div><b>+HP:</b> +${bonus.hpMax ?? 0}</div>
+      <div><b>+MP:</b> +${bonus.mpMax ?? 0}</div>
     `;
   }
 
@@ -136,20 +138,22 @@ export function createPanels(
     } else if (def.kind === "lootbox" && def.lootboxId) {
       const result = openLootbox(inv, def.lootboxId);
       removeItem(inv, def.id, 1);
-      hooks.log(`Opened ${def.name}`);
       for (const r of result.rewards) {
-        hooks.log(`  +${r.count} ${r.def.name}`, "xp");
+        hooks.log(
+          t("log.lootboxOpened", { item: getItemName(r.def), rarity: r.def.rarity }),
+          "xp",
+        );
       }
       paintInventory();
     } else if (def.kind === "consumable") {
       if (def.id === "charge_spirit") {
         profile.spiritChargeLeft = 30;
         removeItem(inv, def.id, 1);
-        hooks.log("Spirit Charge active (+50% melee, 30s)", "xp");
+        hooks.log(t("log.spiritCharge", { sec: 30 }), "xp");
       } else if (def.id === "charge_mana") {
         profile.manaChargeLeft = 30;
         removeItem(inv, def.id, 1);
-        hooks.log("Mana Charge active (+50% spells, 30s)", "xp");
+        hooks.log(t("log.manaCharge", { sec: 30 }), "xp");
       } else if (def.consume) {
         if (def.consume.healHp) hooks.log(`+${def.consume.healHp} HP`, "heal");
         if (def.consume.healMp) hooks.log(`+${def.consume.healMp} MP`, "heal");
@@ -200,24 +204,24 @@ export function createPanels(
         const idef = getItem(inp.itemId);
         const have = countItem(inv, inp.itemId);
         const ok = have >= inp.count;
-        return `<span class="craft-input ${ok ? "ok" : "nope"}">${idef?.icon ?? "?"} ${idef?.name ?? inp.itemId} ${have}/${inp.count}</span>`;
+        return `<span class="craft-input ${ok ? "ok" : "nope"}">${idef?.icon ?? "?"} ${idef ? getItemName(idef) : inp.itemId} ${have}/${inp.count}</span>`;
       })
       .join("");
     row.innerHTML = `
       <div class="craft-result" style="color:${def ? rarityColor(def.rarity) : "#fff"}">
-        ${def?.icon ?? "?"} <b>${r.name}</b>
-        <span class="craft-lvreq">Lv.${r.levelReq}</span>
+        ${def?.icon ?? "?"} <b>${def ? getItemName(def) : r.name}</b>
+        <span class="craft-lvreq">${t("common.lvl")}${r.levelReq}</span>
       </div>
       <div class="craft-inputs">${inputs}</div>
-      <button class="craft-btn" ${can.ok ? "" : "disabled"}>${can.ok ? "Craft" : can.reason ?? "—"}</button>
+      <button class="craft-btn" ${can.ok ? "" : "disabled"}>${can.ok ? t("craft.craft") : can.reason ?? "—"}</button>
     `;
     const btn = row.querySelector(".craft-btn") as HTMLButtonElement;
     btn.addEventListener("click", () => {
       const result = performCraft(inv, r, profile.level, profile.class);
       if (result.ok && def) {
-        hooks.log(`Crafted ${def.name}`, "xp");
+        hooks.log(t("log.crafted", { item: getItemName(def) }), "xp");
       } else if (result.reason) {
-        hooks.log(`Cannot craft: ${result.reason}`, "system");
+        hooks.log(t("log.craftFail"), "system");
       }
       paintCrafting();
     });
@@ -252,25 +256,37 @@ export function createPanels(
       if (!def) continue;
       const row = document.createElement("div");
       row.className = `quest-row quest-${s.status}`;
+      const objItemDef = def.objective.kind === "collect" ? getItem(def.objective.itemId) : null;
       const objText =
         def.objective.kind === "kill"
-          ? `Slay ${def.objective.count} ${def.objective.mobId}`
-          : `Gather ${def.objective.count} ${def.objective.itemId}`;
+          ? t("quest.kill", {
+              name: getMobName(def.objective.mobId),
+              cur: s.progress,
+              tot: def.objective.count,
+            })
+          : t("quest.collect", {
+              name: objItemDef ? getItemName(objItemDef) : def.objective.itemId,
+              cur: s.progress,
+              tot: def.objective.count,
+            });
+      const statusLbl =
+        s.status === "active"
+          ? t("quest.active")
+          : s.status === "complete"
+            ? t("quest.completed")
+            : t("quest.completed");
       row.innerHTML = `
-        <div class="quest-name">${def.name}</div>
-        <div class="quest-desc">${def.description}</div>
-        <div class="quest-obj">${objText} <span class="quest-prog">${s.progress}/${def.objective.count}</span></div>
-        <div class="quest-status">${s.status}</div>
+        <div class="quest-name">${getQuestName(def)}</div>
+        <div class="quest-desc">${getQuestDesc(def)}</div>
+        <div class="quest-obj">${objText}</div>
+        <div class="quest-status">${statusLbl}</div>
       `;
       questsList.appendChild(row);
-    }
-    if (!states.length) {
-      questsList.innerHTML = "<div class='quest-empty'>No quests yet. Visit a city quest-giver.</div>";
     }
     // Section: available quests in the world.
     const avail = document.createElement("div");
     avail.className = "quest-available-block";
-    avail.innerHTML = "<h3>Available Quests</h3>";
+    avail.innerHTML = `<h3>${t("quest.available")}</h3>`;
     for (const def of QUEST_LIST) {
       const known = profile.quests.some((q) => q.questId === def.id);
       if (known) continue;
@@ -278,15 +294,15 @@ export function createPanels(
       const row = document.createElement("div");
       row.className = "quest-row quest-available";
       row.innerHTML = `
-        <div class="quest-name">${def.name}</div>
-        <div class="quest-desc">${def.description}</div>
-        <div class="quest-obj">Lv.${def.levelReq} · Talk to ${getNPC(def.giver)?.name ?? def.giver} in ${getCity(def.city)?.name ?? def.city}</div>
-        <button class="quest-accept">Accept</button>
+        <div class="quest-name">${getQuestName(def)}</div>
+        <div class="quest-desc">${getQuestDesc(def)}</div>
+        <div class="quest-obj">${t("quest.talkTo", { lvl: def.levelReq, npc: getNPC(def.giver) ? getNPCName(def.giver) : def.giver, city: getCity(def.city) ? getCityName(def.city) : def.city })}</div>
+        <button class="quest-accept">${t("quest.accept")}</button>
       `;
       const btn = row.querySelector(".quest-accept") as HTMLButtonElement;
       btn.addEventListener("click", () => {
         profile.quests.push({ questId: def.id, status: "active", progress: 0 });
-        hooks.log(`Accepted: ${def.name}`, "system");
+        hooks.log(t("log.questAccepted", { name: getQuestName(def) }), "system");
         paintQuests();
       });
       avail.appendChild(row);
@@ -331,9 +347,9 @@ export function createPanels(
       if (state.selectedBuilding === b.id) row.classList.add("selected");
       row.innerHTML = `
         <div class="build-icon">${b.icon}</div>
-        <div class="build-name">${b.name}</div>
-        <div class="build-desc">${b.description}</div>
-        <div class="build-cost">${cost}</div>
+        <div class="build-name">${getBuildingName(b)}</div>
+        <div class="build-desc">${getBuildingDesc(b)}</div>
+        <div class="build-cost">${t("build.cost")}: ${cost}</div>
       `;
       row.addEventListener("click", () => {
         state.selectedBuilding = b.id;
@@ -344,7 +360,7 @@ export function createPanels(
     const placed = profile.village!.buildings.length;
     const note = document.createElement("div");
     note.className = "build-note";
-    note.textContent = `Placed: ${placed}. Selected: ${state.selectedBuilding ?? "(none)"}. Click in the world to place.`;
+    note.textContent = `${t("build.placed")}: ${placed}. → ${state.selectedBuilding ?? "—"}`;
     buildList.appendChild(note);
   }
 
@@ -383,15 +399,15 @@ export function createPanels(
       row.className = "shop-row";
       row.innerHTML = `
         <div class="shop-icon" style="color:${rarityColor(def.rarity)}">${def.icon}</div>
-        <div class="shop-name">${def.name}</div>
-        <div class="shop-desc">${def.description}</div>
-        <div class="shop-price">${entry.price} gold</div>
-        <button class="shop-buy">Buy</button>
+        <div class="shop-name">${getItemName(def)}</div>
+        <div class="shop-desc">${getItemDesc(def)}</div>
+        <div class="shop-price">${entry.price} ⛀</div>
+        <button class="shop-buy">${t("shop.buy")}</button>
       `;
       const btn = row.querySelector(".shop-buy") as HTMLButtonElement;
       btn.addEventListener("click", () => {
         if (profile.gold < entry.price) {
-          hooks.log("Not enough gold", "system");
+          hooks.log(t("log.notEnoughGold"), "system");
           return;
         }
         const leftover = addItem(inv, entry.itemId, 1);
@@ -400,7 +416,7 @@ export function createPanels(
           return;
         }
         profile.gold -= entry.price;
-        hooks.log(`Bought ${def.name}`, "xp");
+        hooks.log(t("log.bought", { item: getItemName(def), gold: entry.price }), "xp");
       });
       shopList.appendChild(row);
     }

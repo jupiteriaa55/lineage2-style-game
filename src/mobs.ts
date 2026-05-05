@@ -1,4 +1,5 @@
 import type { MobTemplate } from "./types";
+import { getLocale } from "./i18n";
 
 /**
  * 8 mob templates spread across 4 biomes (2 per biome). Each mob has its
@@ -158,4 +159,20 @@ export const MOB_LIST: MobTemplate[] = Object.values(MOBS);
 
 export function getMob(id: string): MobTemplate | null {
   return MOBS[id] ?? null;
+}
+
+const RU_MOB: Record<string, string> = {
+  wolf: "Серый волк",
+  goblin: "Лесной гоблин",
+  goblin_raider: "Налётчик пустоши",
+  ash_imp: "Пепельный бес",
+  stone_troll: "Каменный тролль",
+  frost_bear: "Ледяной медведь",
+  skeleton: "Восставший скелет",
+  wraith: "Призрак Пустошей",
+};
+
+export function getMobName(id: string): string {
+  if (getLocale() === "ru") return RU_MOB[id] ?? MOBS[id]?.name ?? id;
+  return MOBS[id]?.name ?? id;
 }

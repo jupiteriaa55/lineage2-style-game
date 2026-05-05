@@ -1,4 +1,5 @@
 import type { BuildingDef, BuildingKind } from "./types";
+import { getLocale } from "./i18n";
 
 export const BUILDINGS: Record<BuildingKind, BuildingDef> = {
   house: {
@@ -77,3 +78,31 @@ export const BUILDING_LIST: BuildingDef[] = Object.values(BUILDINGS);
 export const VILLAGE_GRID_SIZE = 24;
 export const VILLAGE_TILE_WORLD = 2.5;
 export const VILLAGE_UNLOCK_LEVEL = 10;
+
+const RU_BUILDING_NAME: Record<string, string> = {
+  house: "Дом",
+  wall: "Каменная стена",
+  tower: "Сторожевая башня",
+  farm: "Ферма",
+  workshop: "Мастерская",
+  well: "Каменный колодец",
+  lamp: "Фонарь",
+};
+const RU_BUILDING_DESC: Record<string, string> = {
+  house: "Простой дом. Увеличивает население деревни.",
+  wall: "Сегмент стены. Защищает деревню.",
+  tower: "Высокая башня. Замечает врагов издалека.",
+  farm: "Поле. Производит еду со временем.",
+  workshop: "Открывает продвинутые рецепты крафта.",
+  well: "Даёт воду и небольшой бонус регенерации.",
+  lamp: "Освещает окружающие клетки ночью.",
+};
+
+export function getBuildingName(def: BuildingDef): string {
+  if (getLocale() === "ru") return RU_BUILDING_NAME[def.id] ?? def.name;
+  return def.name;
+}
+export function getBuildingDesc(def: BuildingDef): string {
+  if (getLocale() === "ru") return RU_BUILDING_DESC[def.id] ?? def.description;
+  return def.description;
+}

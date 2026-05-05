@@ -1,4 +1,5 @@
 import type { ItemDef } from "./types";
+import { getLocale } from "./i18n";
 
 /**
  * Original item catalog. Names and stats are original to this project.
@@ -549,4 +550,120 @@ export function rarityColor(r: string): string {
     default:
       return "#ffffff";
   }
+}
+
+const RU_NAME: Record<string, string> = {
+  weapon_iron_sword: "Железный меч",
+  weapon_dagger: "Стальной кинжал",
+  weapon_oak_staff: "Дубовый посох",
+  weapon_steel_axe: "Стальная секира",
+  weapon_runic_staff: "Рунический посох",
+  weapon_shadow_blade: "Клинок Теней",
+  weapon_titan_greatsword: "Двуручник Титанов",
+  armor_leather_vest: "Кожаный жилет",
+  armor_chainmail: "Кольчуга",
+  armor_plate: "Латные доспехи",
+  armor_robe: "Мантия мага",
+  helmet_iron_cap: "Железный шлем",
+  helmet_great_helm: "Большой шлем",
+  gloves_leather: "Кожаные перчатки",
+  gloves_gauntlets: "Стальные рукавицы",
+  boots_leather: "Кожаные сапоги",
+  boots_greaves: "Стальные поножи",
+  ring_strength: "Кольцо силы",
+  ring_mana: "Кольцо маны",
+  ring_vitality: "Кольцо жизни",
+  amulet_warding: "Амулет защиты",
+  amulet_focus: "Амулет сосредоточения",
+  mat_goblin_ear: "Ухо гоблина",
+  mat_wolf_pelt: "Волчья шкура",
+  mat_orc_tusk: "Клык орка",
+  mat_iron_ingot: "Железный слиток",
+  mat_steel_ingot: "Стальной слиток",
+  mat_arcane_dust: "Магическая пыль",
+  mat_shadow_essence: "Эссенция тьмы",
+  mat_dragon_scale: "Чешуя дракона",
+  mat_wood_log: "Бревно",
+  mat_stone_block: "Каменный блок",
+  pot_minor_heal: "Малое зелье лечения",
+  pot_minor_mana: "Малое зелье маны",
+  pot_greater_heal: "Большое зелье лечения",
+  charge_spirit: "Заряд духа",
+  charge_mana: "Заряд маны",
+  mat_iron_ore: "Железная руда",
+  mat_coal: "Уголь",
+  mat_gold_ore: "Золотая руда",
+  mat_gold_ingot: "Золотой слиток",
+  part_iron_blade: "Железный клинок",
+  part_steel_blade: "Стальной клинок",
+  part_hilt_wood: "Деревянная рукоять",
+  part_hilt_steel: "Стальная рукоять",
+  part_staff_core: "Сердечник посоха",
+  part_axe_head: "Топорище",
+  lootbox_common: "Простой сундук",
+  lootbox_rare: "Железный сундук",
+  lootbox_epic: "Золочёный сундук",
+};
+
+const RU_DESC: Record<string, string> = {
+  weapon_iron_sword: "Надёжный железный клинок для новичков.",
+  weapon_dagger: "Быстрый стальной кинжал — выбор разбойника.",
+  weapon_oak_staff: "Посох из дуба. Проводит ману.",
+  weapon_steel_axe: "Тяжёлая двуручная секира из стали.",
+  weapon_runic_staff: "Посох с магическими рунами.",
+  weapon_shadow_blade: "Клинок, поглощающий свет.",
+  weapon_titan_greatsword: "Огромный меч, сразивший великана.",
+  armor_leather_vest: "Варёная кожа. Лёгкая защита.",
+  armor_chainmail: "Сцепленные железные кольца.",
+  armor_plate: "Тяжёлая броня. Лучшая для танков.",
+  armor_robe: "Расшитая мантия, проводящая ману.",
+  helmet_iron_cap: "Кованый железный шлем.",
+  helmet_great_helm: "Полнолицевой шлем.",
+  gloves_leather: "Простые кожаные перчатки.",
+  gloves_gauntlets: "Кованые рукавицы для бойцов.",
+  boots_leather: "Прочные кожаные сапоги.",
+  boots_greaves: "Поножи, окованные железом.",
+  ring_strength: "Кольцо, прибавляющее мощь.",
+  ring_mana: "Обруч, гудящий магией.",
+  ring_vitality: "Кольцо, укрепляющее жизнь.",
+  amulet_warding: "Отводит часть урона.",
+  amulet_focus: "Заостряет сосредоточение.",
+  mat_goblin_ear: "Доказательство убитого гоблина.",
+  mat_wolf_pelt: "Грубая волчья шкура для брони.",
+  mat_orc_tusk: "Тяжёлый клык павшего орка.",
+  mat_iron_ingot: "Брусок кованого железа.",
+  mat_steel_ingot: "Сталь для тонкого оружия.",
+  mat_arcane_dust: "Пыль с магических существ.",
+  mat_shadow_essence: "Бутылка сумерек.",
+  mat_dragon_scale: "Сверкающая чешуя древнего дракона.",
+  mat_wood_log: "Кусок древесины.",
+  mat_stone_block: "Каменный блок для стройки.",
+  pot_minor_heal: "Восстанавливает 60 HP.",
+  pot_minor_mana: "Восстанавливает 40 MP.",
+  pot_greater_heal: "Восстанавливает 180 HP.",
+  charge_spirit: "Усиливает физическую атаку 30 сек (+50%).",
+  charge_mana: "Усиливает магическую атаку 30 сек (+50%).",
+  mat_iron_ore: "Сырая железная руда. Плавится в слитки.",
+  mat_coal: "Чёрный уголь. Нужен для выплавки стали.",
+  mat_gold_ore: "Сверкающая руда.",
+  mat_gold_ingot: "Очищенное золото для украшений.",
+  part_iron_blade: "Готовый железный клинок.",
+  part_steel_blade: "Закалённый стальной клинок.",
+  part_hilt_wood: "Деревянная рукоять.",
+  part_hilt_steel: "Усиленная стальная рукоять.",
+  part_staff_core: "Рунический сердечник посоха.",
+  part_axe_head: "Тяжёлый стальной обух.",
+  lootbox_common: "Простой сундук с обычными предметами.",
+  lootbox_rare: "Усиленный сундук с редким лутом.",
+  lootbox_epic: "Золочёный сундук для героев.",
+};
+
+export function getItemName(def: ItemDef): string {
+  if (getLocale() === "ru") return RU_NAME[def.id] ?? def.name;
+  return def.name;
+}
+
+export function getItemDesc(def: ItemDef): string {
+  if (getLocale() === "ru") return RU_DESC[def.id] ?? def.description;
+  return def.description;
 }

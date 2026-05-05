@@ -1,4 +1,5 @@
 import type { CityDef, CastleDef, RaceId } from "./types";
+import { getLocale } from "./i18n";
 
 /**
  * Five settlements: 4 starter cities (one per race) + 1 central hub
@@ -121,3 +122,26 @@ export const CASTLES: Record<string, CastleDef> = {
 };
 
 export const CASTLE_LIST: CastleDef[] = Object.values(CASTLES);
+
+const RU_CITY: Record<string, string> = {
+  "city.aldenfeld": "Алденфельд",
+  "city.lirialae": "Лириалаэ",
+  "city.morvanthel": "Морвантель",
+  "city.kaelgard": "Кэльгард",
+  "city.gru.tor": "Лагерь Гру'тор",
+  "city.crossroad": "Бастион Перепутья",
+};
+
+const RU_CASTLE: Record<string, string> = {
+  "castle.crown": "Корона Пяти",
+};
+
+export function getCityName(id: string): string {
+  if (getLocale() === "ru") return RU_CITY[id] ?? CITIES[id]?.name ?? id;
+  return CITIES[id]?.name ?? id;
+}
+
+export function getCastleName(id: string): string {
+  if (getLocale() === "ru") return RU_CASTLE[id] ?? CASTLES[id]?.name ?? id;
+  return CASTLES[id]?.name ?? id;
+}

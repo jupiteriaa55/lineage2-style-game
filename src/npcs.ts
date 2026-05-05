@@ -1,4 +1,5 @@
 import type { NPCDef } from "./types";
+import { getLocale } from "./i18n";
 
 /**
  * Each city is populated with a mix of merchants, quest-givers, class
@@ -256,4 +257,30 @@ export function getNPC(id: string): NPCDef | null {
 
 export function npcsForCity(cityId: string): NPCDef[] {
   return NPC_LIST.filter((n) => n.city === cityId);
+}
+
+const RU_NPC: Record<string, string> = {
+  "npc.alden.merchant": "Эдран Торговец",
+  "npc.alden.quest": "Капитан Вейра",
+  "npc.alden.warrior": "Мастер Гарет",
+  "npc.alden.craft": "Кузнец Ронвар",
+  "npc.lirial.merchant": "Аэлинн с Поляны",
+  "npc.lirial.quest": "Старейшина Телорин",
+  "npc.lirial.mage": "Архимаг Сельвэ",
+  "npc.morvan.merchant": "Вэрин Ночной Клинок",
+  "npc.morvan.quest": "Инквизитор Иссра",
+  "npc.morvan.rogue": "Тенемастер Дрен",
+  "npc.kael.merchant": "Борин Железная Рука",
+  "npc.kael.quest": "Тэн Дурган",
+  "npc.kael.craft": "Мастер Кузни Брокк",
+  "npc.grutor.quest": "Вождь Ку'рок",
+  "npc.grutor.merchant": "Гарк Торговец",
+  "npc.cross.merchant": "Мастер Халрик",
+  "npc.cross.quest": "Лорд-маршал Велден",
+  "npc.cross.guard": "Капитан Бастиона",
+};
+
+export function getNPCName(id: string): string {
+  if (getLocale() === "ru") return RU_NPC[id] ?? NPCS[id]?.name ?? id;
+  return NPCS[id]?.name ?? id;
 }

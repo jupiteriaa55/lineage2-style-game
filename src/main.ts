@@ -29,15 +29,18 @@ import type {
   RaceId,
 } from "./types";
 import { RACES } from "./races";
-import { CLASSES, ADVANCED_CLASS_LEVEL } from "./classes";
+import { ADVANCED_CLASS_LEVEL } from "./classes";
 import { newInventory, addItem, equipmentBonuses } from "./inventory";
 import { showCharacterCreate, showAdvancedClassChoice } from "./characterCreate";
 import { createPanels } from "./panels";
 import { loadProfile, saveProfile } from "./persistence";
-import { CITIES, startCityForRace, CASTLES } from "./cities";
-import { NPC_LIST, getNPC } from "./npcs";
-import { biomeAt, BIOMES } from "./biomes";
+import { CITIES, startCityForRace, CASTLES, getCityName, getCastleName } from "./cities";
+import { NPC_LIST, getNPC, getNPCName } from "./npcs";
+import { biomeAt, BIOMES, getBiomeName } from "./biomes";
 import { MOBS } from "./mobs";
+import { getQuestName } from "./quests";
+import { getItemName, getItem as _gi } from "./items";
+import { getBuildingName as _gbn } from "./buildings";
 import { generateBots, BOT_COUNT } from "./bots";
 import { newCastleState, tickCastle, captureCastle, SIEGE_INTERVAL_MS, CASTLE_HP_MAX } from "./castle";
 import { progressKill, progressCollect, getQuest, QUESTS } from "./quests";
@@ -54,14 +57,52 @@ import {
 } from "./settings";
 import { createLoadingProgress } from "./loader";
 import { createSettingsPanel } from "./settingsPanel";
+import { t } from "./i18n";
 
 registerSW({ immediate: true });
 
+function translateStaticUI(): void {
+  const set = (sel: string, key: string, attr?: string) => {
+    const el = document.querySelector<HTMLElement>(sel);
+    if (!el) return;
+    if (attr) el.setAttribute(attr, t(key));
+    else el.textContent = t(key);
+  };
+  const setHTML = (sel: string, key: string) => {
+    const el = document.querySelector<HTMLElement>(sel);
+    if (el) el.innerHTML = t(key);
+  };
+  set(".logo", "load.title");
+  set("#loading-subtitle", "load.subtitle");
+  set("#loading-phase", "ui.boot");
+  set("#player-name", "ui.adventurer");
+  set("#castle-controller", "ui.garrison");
+  set(".cb-title", "hud.castleTitle");
+  set('button[data-panel="inventory"]', "ui.btnInventory", "title");
+  set('button[data-panel="crafting"]', "ui.btnCrafting", "title");
+  set('button[data-panel="quests"]', "ui.btnQuests", "title");
+  set('button[data-panel="building"]', "ui.btnBuild", "title");
+  set('button[data-panel="settings"]', "ui.btnSettings", "title");
+  set("#menu-button", "ui.menuButton", "aria-label");
+  set("#menu-panel h2", "menu.title");
+  set('#menu-panel button[data-action="resume"]', "menu.resume");
+  set('#menu-panel button[data-action="save"]', "menu.save");
+  set('#menu-panel button[data-action="reset"]', "menu.reset");
+  setHTML("#menu-panel .hint", "ui.hintLong");
+  set("#inventory-panel h2", "panel.inventory");
+  set("#crafting-panel h2", "panel.crafting");
+  set("#quests-panel h2", "panel.quests");
+  set("#build-panel h2", "panel.build");
+  set("#shop-title", "panel.shop");
+}
+
+translateStaticUI();
+
 const loading = createLoadingProgress();
-await loading.set(2, "Loading settings");
+await loading.set(2, t("load.settings"));
 let settings: Settings = loadSettings();
 let quality = getQuality(settings);
-await loading.set(6, "Detecting hardware");
+await loading.set(6, t("load.hardware"));
 
 /* -------------------------------------------------------------------- */
 /*                          Player profile                              */
@@ -119,11 +160,11 @@ function makeFreshProfile(
 /*                              Boot                                    */
 /* -------------------------------------------------------------------- */
 
-await loading.set(10, "Loading hero profile");
+await loading.set(10, t("load.profile"));
 const profile = await bootProfile();
 // Character-creation overlay hides the loading screen; restore it for world build.
 loading.show();
-await loading.set(20, "Forging the realm");
+await loading.set(20, t("load.world"));
 
 const canvas = document.getElementById("game-canvas") as HTMLCanvasElement;
 const renderer = new THREE.WebGLRenderer({
@@ -143,7 +184,7 @@ const world = createWorld({
 const scene = world.scene;
 applySceneFog(scene, quality);
 applyLightShadows(world.sun, quality);
-await loading.set(45, "Carving cities and castle");
+await loading.set(45, t("load.cities"));
 
 const camera = new THREE.PerspectiveCamera(
   55,
@@ -217,7 +258,7 @@ function spawnMobsForBiome(biomeId: keyof typeof BIOMES) {
 for (const id of Object.keys(BIOMES) as (keyof typeof BIOMES)[]) {
   spawnMobsForBiome(id);
 }
-await loading.set(60, "Summoning monsters");
+await loading.set(60, t("load.mobs"));
 
 /* -------------------------------------------------------------------- */
 /*                              Bot players                             */
@@ -237,7 +278,7 @@ for (const def of botDefs) {
   const e = createBotPlayer(scene, pos, def.color, def.name, def.level);
   bots.push({ entity: e, def, nextWanderAt: 0 });
 }
-await loading.set(75, "Bringing players online");
+await loading.set(75, t("load.bots"));
 
 /* -------------------------------------------------------------------- */
 /*                              NPCs                                    */
@@ -329,7 +370,7 @@ const hooks = {
       camera,
     );
     if (target === player) {
-      hud.log(`You take ${amount} damage`, "dmg");
+      hud.log(t("log.youDamage", { n: amount }), "dmg");
     }
   },
   onHeal(target: Entity, amount: number) {
@@ -337,25 +378,22 @@ const hooks = {
       { worldPos: target.position, text: `+${amount}`, type: "heal" },
       camera,
     );
-    if (target === player) hud.log(`You are healed for ${amount}`, "heal");
+    if (target === player) hud.log(t("log.youHeal", { n: amount }), "heal");
   },
   onKill(killer: Entity, victim: Entity) {
     if (killer === player) {
       const r = grantXP(player, xpState, victim);
-      hud.log(`Defeated ${victim.name} (+${r.xpGained} XP)`, "xp");
+      hud.log(t("log.defeat", { name: victim.name, xp: r.xpGained }), "xp");
       if (r.leveledUp) {
-        hud.log(`Level up! You are now Lv. ${player.level}`, "system");
+        hud.log(t("log.levelUp", { lvl: player.level }), "system");
         if (player.level === ADVANCED_CLASS_LEVEL && !profile.advanced) {
           void showAdvancedClassChoice(profile.class).then((id) => {
             profile.advanced = id as PlayerProfile["advanced"];
-            hud.log(`Mastered ${id}!`, "system");
+            hud.log(t("log.mastered", { name: t(`class.${id}`) }), "system");
           });
         }
         if (player.level === VILLAGE_UNLOCK_LEVEL && !profile.village) {
-          hud.log(
-            `Village Builder unlocked. Press B to start your village.`,
-            "system",
-          );
+          hud.log(t("log.villageUnlocked"), "system");
         }
       }
       // Drops.
@@ -366,12 +404,12 @@ const hooks = {
       if (victim.mobKind) {
         const completed = progressKill(profile.quests, victim.mobKind);
         for (const def of completed) {
-          hud.log(`Quest ready: ${def.name}`, "xp");
+          hud.log(t("log.questReady", { name: getQuestName(def) }), "xp");
         }
       }
       if (player.attackTarget === victim) player.attackTarget = null;
     } else if (victim === player) {
-      hud.log(`You were defeated by ${killer.name}`, "system");
+      hud.log(t("log.died", { name: killer.name }), "system");
       respawnPlayer();
     }
     if (victim !== player) {
@@ -381,12 +419,12 @@ const hooks = {
 };
 
 function rollMobDrops(mobKind: string) {
-  const t = MOBS[mobKind];
-  if (!t) return;
-  const droppedGold = Math.floor(5 + Math.random() * 25 * t.level);
+  const mob = MOBS[mobKind];
+  if (!mob) return;
+  const droppedGold = Math.floor(5 + Math.random() * 25 * mob.level);
   profile.gold += droppedGold;
-  hud.log(`+${droppedGold} gold`, "xp");
-  for (const drop of t.drops) {
+  hud.log(t("log.gold", { n: droppedGold }), "xp");
+  for (const drop of mob.drops) {
     if (Math.random() < drop.chance) {
       const count = drop.count
         ? Math.floor(drop.count[0] + Math.random() * (drop.count[1] - drop.count[0] + 1))
@@ -396,15 +434,15 @@ function rollMobDrops(mobKind: string) {
       const leftover = addItem(profile.inventory, drop.itemId, count);
       const got = count - leftover;
       if (got > 0) {
-        hud.log(`+${got}× ${def.name}`, "xp");
+        hud.log(t("log.itemPickup", { count: got, item: getItemName(def) }), "xp");
       }
     }
   }
-  if (t.lootboxChance && Math.random() < t.lootboxChance.chance) {
-    const def = getItem(t.lootboxChance.id);
+  if (mob.lootboxChance && Math.random() < mob.lootboxChance.chance) {
+    const def = getItem(mob.lootboxChance.id);
     if (def) {
-      addItem(profile.inventory, t.lootboxChance.id, 1);
-      hud.log(`Found a ${def.name}!`, "xp");
+      addItem(profile.inventory, mob.lootboxChance.id, 1);
+      hud.log(t("log.itemPickup", { count: 1, item: getItemName(def) }), "xp");
     }
   }
   // Quest collect progress.
@@ -414,7 +452,7 @@ function rollMobDrops(mobKind: string) {
     return n;
   });
   for (const def of completed) {
-    hud.log(`Quest ready: ${def.name}`, "xp");
+    hud.log(t("log.questReady", { name: getQuestName(def) }), "xp");
   }
 }
 function respawnPlayer() {
@@ -425,7 +463,7 @@ function respawnPlayer() {
   player.alive = true;
   player.attackTarget = null;
   player.moveTarget = null;
-  hud.log(`You respawned in ${home.name}.`, "system");
+  hud.log(`${profile.name}: ${getCityName(home.id)}.`, "system");
 }
 
 /* -------------------------------------------------------------------- */
@@ -516,7 +554,7 @@ function tryUseSkillByIndex(i: number) {
   if (!result.used && result.reason) {
     hud.log(`${skill.name}: ${result.reason}`, "system");
   } else if (result.used) {
-    hud.log(`Used ${skill.name}`, "system");
+    hud.log(skill.name, "system");
   }
 }
 
@@ -534,11 +572,10 @@ hud.onMenuAction((action) => {
     xpState.toNext = 100;
     for (const s of skills) s.cooldownLeft = 0;
     respawnPlayer();
-    hud.log("Character reset.", "system");
   } else if (action === "save") {
     syncProfileFromState();
     saveProfile(profile);
-    hud.log("Game saved.", "system");
+    hud.log(t("log.saved"), "system");
   }
 });
 
@@ -552,7 +589,7 @@ document.querySelectorAll<HTMLButtonElement>("[data-panel]").forEach((btn) => {
     else if (id === "settings") settingsPanel.toggle();
     else if (id === "building") {
       if (profile.level < VILLAGE_UNLOCK_LEVEL) {
-        hud.log(`Village builder unlocks at Lv.${VILLAGE_UNLOCK_LEVEL}`, "system");
+        hud.log(t("log.villageLocked", { lvl: VILLAGE_UNLOCK_LEVEL }), "system");
         return;
       }
       panels.showBuilding();
@@ -582,9 +619,8 @@ canvas.addEventListener("pointerdown", (e) => {
   if (hit.enemy) {
     player.attackTarget = hit.enemy;
     player.moveTarget = hit.enemy.position.clone();
-    hud.log(`Targeted ${hit.enemy.name}`, "system");
   } else if (hit.bot) {
-    hud.log(`${hit.bot.name} (Lv.${hit.bot.level}) — fellow adventurer.`, "system");
+    hud.log(`${hit.bot.name} (Lv.${hit.bot.level})`, "system");
   } else if (hit.point) {
     player.attackTarget = null;
     player.moveTarget = hit.point.clone();
@@ -600,12 +636,11 @@ function handleNpcInteract(npcId: string) {
   );
   if (dist > 4.5) {
     player.moveTarget = new THREE.Vector3(npc.pos[0], 0, npc.pos[1]);
-    hud.log(`Walking to ${npc.name}...`, "system");
     return;
   }
   if (npc.kind === "merchant" && npc.shop) {
     panels.closeAll();
-    panels.showShop(npc.name, npc.shop);
+    panels.showShop(getNPCName(npc.id), npc.shop);
   } else if (npc.kind === "quest" && npc.questIds) {
     for (const qid of npc.questIds) {
       const def = getQuest(qid);
@@ -620,7 +655,7 @@ function handleNpcInteract(npcId: string) {
           for (const r of def.rewards.items ?? []) {
             addItem(profile.inventory, r.itemId, r.count);
           }
-          hud.log(`Turned in: ${def.name} (+${def.rewards.xp} XP, +${def.rewards.gold} gold)`, "xp");
+          hud.log(t("log.questCompleted", { name: getQuestName(def) }) + ` (+${def.rewards.xp} XP, +${def.rewards.gold})`, "xp");
           // Apply XP level-ups now.
           while (xpState.xp >= xpState.toNext) {
             xpState.xp -= xpState.toNext;
@@ -632,13 +667,13 @@ function handleNpcInteract(npcId: string) {
             player.stats.defense += 1;
             player.stats.hp = player.stats.hpMax;
             player.stats.mp = player.stats.mpMax;
-            hud.log(`Level up! You are now Lv. ${player.level}`, "system");
+            hud.log(t("log.levelUp", { lvl: player.level }), "system");
           }
           continue;
         }
       } else if (profile.level >= def.levelReq) {
         profile.quests.push({ questId: qid, status: "active", progress: 0 });
-        hud.log(`Accepted: ${def.name}`, "system");
+        hud.log(t("log.questAccepted", { name: getQuestName(def) }), "system");
       }
     }
     panels.showQuests();
@@ -646,11 +681,11 @@ function handleNpcInteract(npcId: string) {
     panels.closeAll();
     panels.showCrafting();
   } else if (npc.kind === "trainer") {
-    hud.log(`${npc.name} hones your form. (+1 atk, +1 def)`, "xp");
+    hud.log(`${getNPCName(npc.id)}: +1 atk, +1 def`, "xp");
     player.stats.attack += 1;
     player.stats.defense += 1;
   } else if (npc.kind === "guard") {
-    hud.log(`${npc.name}: "Stand vigilant. Sieges come every 7 minutes."`, "system");
+    hud.log(`${getNPCName(npc.id)}.`, "system");
   }
 }
 
@@ -680,7 +715,7 @@ function placeBuildingAt(point: THREE.Vector3) {
     let have = 0;
     for (const s of profile.inventory.bag) if (s && s.itemId === c.itemId) have += s.count;
     if (have < c.count) {
-      hud.log(`Need more ${c.itemId} for ${def.name}`, "system");
+      hud.log(t("log.craftFail"), "system");
       return;
     }
   }
@@ -698,7 +733,7 @@ function placeBuildingAt(point: THREE.Vector3) {
   const pb: PlacedBuilding = { kind, x: tx, z: tz, rot: 0 };
   profile.village.buildings.push(pb);
   spawnPlacedBuilding(pb);
-  hud.log(`Built ${def.name}`, "xp");
+  hud.log(`${t("build.placed")}: ${_gbn(def)}`, "xp");
 }
 
 function spawnPlacedBuilding(pb: PlacedBuilding) {
@@ -763,7 +798,7 @@ window.addEventListener("keydown", (e) => {
       buildModeActive = true;
       canvas.classList.add("build-cursor");
     } else {
-      hud.log(`Village builder unlocks at Lv.${VILLAGE_UNLOCK_LEVEL}`, "system");
+      hud.log(t("log.villageLocked", { lvl: VILLAGE_UNLOCK_LEVEL }), "system");
     }
   } else if (e.key === "s" || e.key === "S") {
     panels.closeAll();
@@ -856,22 +891,24 @@ function updateBots(dt: number, now: number) {
 
 function updateCastleUI() {
   const banner = document.getElementById("castle-banner");
+  const title = banner?.querySelector(".cb-title") as HTMLElement | null;
   const ctrl = document.getElementById("castle-controller");
   const tmr = document.getElementById("castle-timer");
   if (!banner || !ctrl || !tmr || !profile.castle) return;
   banner.classList.remove("hidden");
+  if (title) title.textContent = getCastleName("castle.crown");
   ctrl.textContent = profile.castle.controllerName;
   const remaining = Math.max(0, profile.castle.nextSiegeAt - Date.now());
   const m = Math.floor(remaining / 60000);
   const s = Math.floor((remaining / 1000) % 60);
-  tmr.textContent = `Next siege: ${m}m ${s}s`;
+  tmr.textContent = t("hud.castleNextSiege", { time: `${m}м ${s}с` });
 }
 
 function updateZoneLabel() {
   const el = document.getElementById("minimap-zone");
   if (!el) return;
   const b = biomeAt(player.position.x, player.position.z);
-  if (b) el.textContent = b.name;
+  if (b) el.textContent = getBiomeName(b.id);
   else {
     // City label?
     let name: string | null = null;
@@ -879,11 +916,11 @@ function updateZoneLabel() {
       const dx = player.position.x - c.center[0];
       const dz = player.position.z - c.center[1];
       if (dx * dx + dz * dz <= c.radius * c.radius) {
-        name = c.name;
+        name = getCityName(c.id);
         break;
       }
     }
-    el.textContent = name ?? "Wilderness";
+    el.textContent = name ?? (t("common.lvl") === "Lv." ? "Wilderness" : "Глушь");
   }
 }
 
@@ -907,7 +944,7 @@ function maybeStartSiege() {
       enemies.push(e);
     }
   }
-  hud.log("A siege wave has spawned at the Crown of the Five!", "system");
+  hud.log(t("log.siegeWave"), "system");
   profile.castle.nextSiegeAt = Date.now() + SIEGE_INTERVAL_MS;
 }
 
@@ -930,7 +967,7 @@ function tickCastleZone() {
     profile.castle.hp = Math.max(0, profile.castle.hp - 60 * 0.016);
     if (profile.castle.hp <= 0) {
       captureCastle(profile.castle, profile.name);
-      hud.log("You captured the Crown of the Five!", "xp");
+      hud.log(t("log.castleCaptured", { gold: CASTLES["castle.crown"].dailyTax }), "xp");
     }
   }
 }
@@ -958,9 +995,9 @@ function tick() {
 
   if (player.alive) {
     player.attackCooldown = Math.max(0, player.attackCooldown - dt);
-    const t = player.attackTarget;
-    if (t && t.alive) {
-      const d = player.position.distanceTo(t.position);
+    const tgt = player.attackTarget;
+    if (tgt && tgt.alive) {
+      const d = player.position.distanceTo(tgt.position);
       if (d <= player.stats.attackRange) {
         player.moveTarget = null;
         if (player.attackCooldown <= 0) {
@@ -969,20 +1006,20 @@ function tick() {
           if (profile.spiritChargeLeft > 0) {
             baseDamage = Math.max(
               1,
-              (player.stats.attack - t.stats.defense * 0.5) * 1.5,
+              (player.stats.attack - tgt.stats.defense * 0.5) * 1.5,
             );
             profile.spiritChargeLeft = 0;
           }
           // Apply equipment bonuses on the fly so stat changes persist.
-          performAttack(player, t, hooks, baseDamage);
+          performAttack(player, tgt, hooks, baseDamage);
           player.attackCooldown = player.stats.attackSpeed;
           const dir = new THREE.Vector3()
-            .subVectors(t.position, player.position)
+            .subVectors(tgt.position, player.position)
             .normalize();
           player.group.rotation.y = Math.atan2(dir.x, dir.z);
         }
       } else {
-        player.moveTarget = t.position.clone();
+        player.moveTarget = tgt.position.clone();
       }
     }
     if (player.stats.mp < player.stats.mpMax) {
@@ -991,7 +1028,7 @@ function tick() {
         player.stats.mp + 2 * dt,
       );
     }
-    if (player.stats.hp < player.stats.hpMax && !t) {
+    if (player.stats.hp < player.stats.hpMax && !tgt) {
       player.stats.hp = Math.min(
         player.stats.hpMax,
         player.stats.hp + 1.5 * dt,
@@ -1046,7 +1083,7 @@ function tick() {
     const out = tickCastle(profile.castle, CASTLES["castle.crown"].dailyTax);
     if (out.taxPaid > 0) {
       profile.gold += out.taxPaid;
-      hud.log(`+${out.taxPaid} gold from castle taxes!`, "xp");
+      hud.log(t("log.gold", { n: out.taxPaid }), "xp");
     }
   }
 
@@ -1062,14 +1099,21 @@ function tick() {
 }
 
 async function start() {
-  await loading.set(95, "Preparing your hero");
+  await loading.set(95, t("load.hero"));
   hud.show();
-  await loading.set(100, "Ready");
+  await loading.set(100, t("load.ready"));
   await loading.hide();
-  hud.log(`Welcome, ${profile.name} the ${RACES[profile.race].name} ${CLASSES[profile.class].name}.`, "system");
-  hud.log("Click to move. Click an NPC (gold = merchant, blue = quest, orange = trainer).", "system");
-  hud.log("Hotkeys: I bag · C craft · Q quests · B build · 1-5 skills · S settings.", "system");
-  hud.log(`Graphics: ${quality.name.toUpperCase()} (auto-detected). Press S to change.`, "system");
+  hud.log(
+    t("welcome.line1", {
+      name: profile.name,
+      race: t(`race.${profile.race}`),
+      cls: t(`class.${profile.class}`),
+    }),
+    "system",
+  );
+  hud.log(t("welcome.controls"), "system");
+  hud.log(t("welcome.hotkeys"), "system");
+  hud.log(t("welcome.graphics", { preset: quality.name.toUpperCase() }), "system");
   // Auto-grant quests at level zero list.
   void QUESTS;
   // Apply equipment bonuses to player stats once.

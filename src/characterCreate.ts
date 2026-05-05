@@ -1,11 +1,25 @@
 import { RACES } from "./races";
 import { CLASSES } from "./classes";
 import type { ClassId, RaceId } from "./types";
+import { t } from "./i18n";
 
 interface Selection {
   name: string;
   race: RaceId;
   cls: ClassId;
+}
+
+function raceLabel(id: RaceId): string {
+  return t(`race.${id}`);
+}
+function raceDesc(id: RaceId): string {
+  return t(`race.${id}.desc`);
+}
+function classLabel(id: ClassId): string {
+  return t(`class.${id}`);
+}
+function classDesc(id: ClassId): string {
+  return t(`class.${id}.desc`);
 }
 
 export function showCharacterCreate(
@@ -28,27 +42,27 @@ export function showCharacterCreate(
 
     overlay.innerHTML = `
       <div class="create-panel">
-        <h1>Forge Your Hero</h1>
-        <p class="create-subtitle">Chronicles of Devil Gods</p>
+        <h1>${t("cc.title")}</h1>
+        <p class="create-subtitle">${t("cc.subtitle")}</p>
 
         <div class="create-row create-row--name">
-          <label for="cc-name">Name</label>
-          <input id="cc-name" type="text" maxlength="20" value="${name}" placeholder="Enter your name" />
+          <label for="cc-name">${t("cc.name")}</label>
+          <input id="cc-name" type="text" maxlength="20" value="${name}" placeholder="${t("cc.namePlaceholder")}" />
         </div>
 
         <div class="create-row">
-          <h2>Choose Race</h2>
+          <h2>${t("cc.chooseRace")}</h2>
           <div id="cc-races" class="cc-grid"></div>
           <div id="cc-race-info" class="cc-info"></div>
         </div>
 
         <div class="create-row">
-          <h2>Choose Class</h2>
+          <h2>${t("cc.chooseClass")}</h2>
           <div id="cc-classes" class="cc-grid"></div>
           <div id="cc-class-info" class="cc-info"></div>
         </div>
 
-        <button id="cc-start" class="cc-start-btn">Begin Adventure</button>
+        <button id="cc-start" class="cc-start-btn">${t("cc.begin")}</button>
       </div>
     `;
 
@@ -67,13 +81,14 @@ export function showCharacterCreate(
         const card = document.createElement("button");
         card.className = "cc-card";
         if (r.id === race) card.classList.add("selected");
+        const lbl = raceLabel(r.id);
         card.innerHTML = `
           <div class="cc-card-icon" style="background:#${r.palette.skin
             .toString(16)
             .padStart(6, "0")}">
-            <span style="color:#${r.palette.hair.toString(16).padStart(6, "0")}">${r.name[0]}</span>
+            <span style="color:#${r.palette.hair.toString(16).padStart(6, "0")}">${lbl[0]}</span>
           </div>
-          <div class="cc-card-name">${r.name}</div>
+          <div class="cc-card-name">${lbl}</div>
         `;
         card.addEventListener("click", () => {
           race = r.id;
@@ -90,9 +105,9 @@ export function showCharacterCreate(
         .map(([k, v]) => `${k} ${v! >= 0 ? "+" : ""}${v}`)
         .join(", ");
       raceInfo.innerHTML = `
-        <div class="cc-name">${r.name}</div>
-        <div class="cc-desc">${r.description}</div>
-        <div class="cc-bonus">${bonusEntries || "No bonuses"}</div>
+        <div class="cc-name">${raceLabel(r.id)}</div>
+        <div class="cc-desc">${raceDesc(r.id)}</div>
+        <div class="cc-bonus">${bonusEntries || "—"}</div>
       `;
     }
 
@@ -106,7 +121,7 @@ export function showCharacterCreate(
           <div class="cc-card-icon cc-class-${c.id}">
             <span>${c.id === "warrior" ? "⚔" : c.id === "mage" ? "✦" : "🗡"}</span>
           </div>
-          <div class="cc-card-name">${c.name}</div>
+          <div class="cc-card-name">${classLabel(c.id)}</div>
         `;
         card.addEventListener("click", () => {
           cls = c.id;
@@ -120,12 +135,15 @@ export function showCharacterCreate(
     function paintClassInfo() {
       const c = CLASSES[cls];
       const advanced = c.advanced
-        .map((a) => `<li><b>${a.name}</b> &mdash; ${a.description}</li>`)
+        .map(
+          (a) =>
+            `<li><b>${t(`class.${a.id}`)}</b> &mdash; ${t(`class.${a.id}.desc`)}</li>`,
+        )
         .join("");
       classInfo.innerHTML = `
-        <div class="cc-name">${c.name}</div>
-        <div class="cc-desc">${c.description}</div>
-        <div class="cc-bonus">Advanced (Lv. 20):</div>
+        <div class="cc-name">${classLabel(c.id)}</div>
+        <div class="cc-desc">${classDesc(c.id)}</div>
+        <div class="cc-bonus">${t("cc.advancedAt20")}</div>
         <ul class="cc-advanced">${advanced}</ul>
       `;
     }
@@ -135,7 +153,7 @@ export function showCharacterCreate(
     });
 
     startBtn.addEventListener("click", () => {
-      const finalName = name || RACES[race].name + " Hero";
+      const finalName = name || raceLabel(race);
       overlay.classList.add("fade-out");
       window.setTimeout(() => overlay.remove(), 400);
       resolve({ name: finalName, race, cls });
@@ -161,16 +179,16 @@ export function showAdvancedClassChoice(
       .map(
         (a) => `
         <button class="cc-card cc-advanced-card" data-id="${a.id}">
-          <div class="cc-card-name">${a.name}</div>
-          <div class="cc-desc">${a.description}</div>
+          <div class="cc-card-name">${t(`class.${a.id}`)}</div>
+          <div class="cc-desc">${t(`class.${a.id}.desc`)}</div>
         </button>`,
       )
       .join("");
 
     overlay.innerHTML = `
       <div class="create-panel cc-advanced-panel">
-        <h1>You Have Reached Mastery</h1>
-        <p class="create-subtitle">Choose your advanced path</p>
+        <h1>${t("cc.advTitle")}</h1>
+        <p class="create-subtitle">${t("cc.advBody")}</p>
         <div class="cc-grid cc-grid--two">${cards}</div>
       </div>
     `;

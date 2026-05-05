@@ -1,4 +1,5 @@
 import type { QuestDef, QuestState, QuestStatus } from "./types";
+import { getLocale } from "./i18n";
 
 export const QUESTS: Record<string, QuestDef> = {
   "quest.wolves_of_greenleaf": {
@@ -152,6 +153,45 @@ export const QUEST_LIST: QuestDef[] = Object.values(QUESTS);
 
 export function getQuest(id: string): QuestDef | null {
   return QUESTS[id] ?? null;
+}
+
+const RU_QUEST_NAME: Record<string, string> = {
+  "quest.wolves_of_greenleaf": "Волки Зелёного Леса",
+  "quest.goblin_problem": "Гоблины на дороге",
+  "quest.arcane_essence": "Магический остаток",
+  "quest.wraith_hunt": "Призраки Пустошей",
+  "quest.skeleton_purge": "Изгнание мертвых",
+  "quest.shadow_market": "Теневой рынок",
+  "quest.troll_hunt": "Тролль над перевалом",
+  "quest.frostbear_pelt": "Шкуры ледяных медведей",
+  "quest.imp_burn": "Сожги бесов",
+  "quest.castle_call": "Зов Короны",
+};
+
+const RU_QUEST_DESC: Record<string, string> = {
+  "quest.wolves_of_greenleaf":
+    "Волки Зелёного Леса режут скот. Принеси мне 6 шкур.",
+  "quest.goblin_problem": "Уничтожь 8 лесных гоблинов на дороге.",
+  "quest.arcane_essence":
+    "Собери 8 магической пыли с бесов и лесных существ.",
+  "quest.wraith_hunt": "Упокой 4 призраков в Пустошах.",
+  "quest.skeleton_purge": "Уничтожь 12 восставших скелетов.",
+  "quest.shadow_market": "Достань 4 эссенции тьмы из мёртвых земель.",
+  "quest.troll_hunt": "Каменные тролли заблокировали перевал. Убей 5.",
+  "quest.frostbear_pelt": "Принеси 12 шкур с ледяных медведей.",
+  "quest.imp_burn": "Жареное мясо — хорошее мясо. Сожги 10 пепельных бесов.",
+  "quest.castle_call":
+    "Сокруши гарнизон Короны Пяти и провозгласи её своей.",
+};
+
+export function getQuestName(def: QuestDef): string {
+  if (getLocale() === "ru") return RU_QUEST_NAME[def.id] ?? def.name;
+  return def.name;
+}
+
+export function getQuestDesc(def: QuestDef): string {
+  if (getLocale() === "ru") return RU_QUEST_DESC[def.id] ?? def.description;
+  return def.description;
 }
 
 /* ---------- Quest state helpers ---------- */

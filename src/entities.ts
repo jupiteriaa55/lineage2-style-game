@@ -7,7 +7,7 @@ import type {
   Stats,
 } from "./types";
 import { buildRaceMesh } from "./races";
-import { getMob } from "./mobs";
+import { getMob, getMobName } from "./mobs";
 
 let nextId = 1;
 
@@ -288,7 +288,7 @@ export function createMob(
   const e: Entity = {
     id: `${mobId}-${nextId++}`,
     kind: "enemy",
-    name: t.name,
+    name: getMobName(mobId),
     level: t.level,
     stats: statsFromMob(t),
     group,

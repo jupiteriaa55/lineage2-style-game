@@ -1,4 +1,5 @@
 import type { BiomeDef, BiomeId } from "./types";
+import { getLocale } from "./i18n";
 
 /**
  * Four world biomes. Each defines a circular world region with its own
@@ -52,4 +53,16 @@ export function biomeAt(x: number, z: number): BiomeDef | null {
     if (dx * dx + dz * dz <= b.radius * b.radius) return b;
   }
   return null;
+}
+
+const RU_BIOME: Record<string, string> = {
+  forest: "Зеленолистные леса",
+  wasteland: "Пепельные пустоши",
+  mountains: "Железные пики",
+  graveyard: "Кладбище Пустошей",
+};
+
+export function getBiomeName(id: string): string {
+  if (getLocale() === "ru") return RU_BIOME[id] ?? BIOMES[id as BiomeId]?.name ?? id;
+  return BIOMES[id as BiomeId]?.name ?? id;
 }
