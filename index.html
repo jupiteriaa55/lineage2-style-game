@@ -6,15 +6,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Chronicle Elfs" />
+    <meta name="apple-mobile-web-app-title" content="Chronicles of Devil Gods" />
     <meta name="theme-color" content="#1a1a2e" />
     <link rel="apple-touch-icon" href="icons/icon-192.png" />
-    <title>Chronicle Elfs</title>
+    <title>Chronicles of Devil Gods</title>
   </head>
   <body>
     <div id="loading-screen">
-      <div class="logo">CHRONICLE ELFS</div>
-      <div class="subtitle">Loading the world...</div>
+      <div class="logo">CHRONICLES OF DEVIL GODS</div>
+      <div class="subtitle">Forging the realm...</div>
       <div class="spinner"></div>
     </div>
     <canvas id="game-canvas"></canvas>
@@ -39,6 +39,11 @@
               <div id="xp-fill" class="bar-fill"></div>
               <span id="xp-text" class="bar-text">0%</span>
             </div>
+            <div id="charge-row" class="charge-row">
+              <span id="spirit-charge" class="charge hidden">⚡ <em id="spirit-time">0</em>s</span>
+              <span id="mana-charge" class="charge hidden">✨ <em id="mana-time">0</em>s</span>
+              <span id="player-gold" class="gold">⛀ 0</span>
+            </div>
           </div>
         </div>
         <div id="target-frame" class="target-frame hidden">
@@ -54,14 +59,27 @@
             </div>
           </div>
         </div>
+        <div id="castle-banner" class="castle-banner hidden">
+          <span class="cb-title">Crown of the Five</span>
+          <span id="castle-controller" class="cb-controller">Garrison</span>
+          <span id="castle-timer" class="cb-timer">--</span>
+        </div>
       </div>
 
       <div id="combat-log"></div>
+
+      <div id="side-buttons" class="side-buttons">
+        <button data-panel="inventory" class="side-btn" title="Inventory (I)">🎒</button>
+        <button data-panel="crafting" class="side-btn" title="Crafting (C)">⚒</button>
+        <button data-panel="quests" class="side-btn" title="Quests (Q)">❒</button>
+        <button data-panel="building" class="side-btn" title="Build Village (B)">⌂</button>
+      </div>
 
       <div id="bottom-bar">
         <div id="hotbar"></div>
         <div id="minimap-frame">
           <canvas id="minimap"></canvas>
+          <div id="minimap-zone" class="minimap-zone">—</div>
         </div>
       </div>
 
@@ -69,11 +87,61 @@
       <div id="menu-panel" class="hidden">
         <h2>Menu</h2>
         <button data-action="resume">Resume</button>
+        <button data-action="save">Save Game</button>
         <button data-action="reset">Reset Character</button>
         <p class="hint">
-          Click left mouse to move/attack. Right click to deselect.<br />
-          Hotkeys 1-5: skills. Touch: tap to move/target, tap skills.
+          Click to move/attack. Right click to deselect.<br />
+          Hotkeys 1-5: skills · I: bag · C: craft · Q: quests · B: build.
         </p>
+      </div>
+
+      <!-- Inventory panel -->
+      <div id="inventory-panel" class="game-panel hidden">
+        <div class="panel-head">
+          <h2>Inventory</h2>
+          <button id="inventory-close" class="panel-close">×</button>
+        </div>
+        <div class="panel-body inv-body">
+          <div class="inv-stats" id="inventory-stats"></div>
+          <div class="inv-equip" id="inventory-equip"></div>
+          <div class="inv-bag" id="inventory-bag"></div>
+        </div>
+      </div>
+
+      <!-- Crafting panel -->
+      <div id="crafting-panel" class="game-panel hidden">
+        <div class="panel-head">
+          <h2>Crafting</h2>
+          <button id="crafting-close" class="panel-close">×</button>
+        </div>
+        <div class="panel-body" id="crafting-list"></div>
+      </div>
+
+      <!-- Quests panel -->
+      <div id="quests-panel" class="game-panel hidden">
+        <div class="panel-head">
+          <h2>Quests</h2>
+          <button id="quests-close" class="panel-close">×</button>
+        </div>
+        <div class="panel-body" id="quests-list"></div>
+      </div>
+
+      <!-- Build panel -->
+      <div id="build-panel" class="game-panel hidden">
+        <div class="panel-head">
+          <h2>Village Builder</h2>
+          <button id="build-close" class="panel-close">×</button>
+        </div>
+        <div class="panel-body" id="build-list"></div>
+      </div>
+
+      <!-- Shop panel -->
+      <div id="shop-panel" class="game-panel hidden">
+        <div class="panel-head">
+          <h2 id="shop-title">Shop</h2>
+          <button id="shop-close" class="panel-close">×</button>
+        </div>
+        <div class="panel-body" id="shop-list"></div>
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>

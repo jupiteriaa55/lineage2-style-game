@@ -6,7 +6,12 @@ export default defineConfig({
   plugins: [
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.svg", "icons/*.png"],
+      includeAssets: [
+        "favicon.svg",
+        "icons/*.png",
+        "assets/**/*.glb",
+        "assets/LICENSE-*.txt",
+      ],
       manifest: {
         name: "Chronicle Elfs",
         short_name: "Chronicle Elfs",
@@ -34,8 +39,8 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,svg,png,ico,woff2}"],
-        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        globPatterns: ["**/*.{js,css,html,svg,png,ico,woff2,glb,gltf,txt}"],
+        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
       },
     }),
   ],
