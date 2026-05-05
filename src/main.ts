@@ -43,8 +43,25 @@ import { newCastleState, tickCastle, captureCastle, SIEGE_INTERVAL_MS, CASTLE_HP
 import { progressKill, progressCollect, getQuest, QUESTS } from "./quests";
 import { BUILDINGS, VILLAGE_TILE_WORLD, VILLAGE_UNLOCK_LEVEL } from "./buildings";
 import { getItem } from "./items";
+import {
+  loadSettings,
+  saveSettings,
+  getQuality,
+  applyRendererSettings,
+  applySceneFog,
+  applyLightShadows,
+  type Settings,
+} from "./settings";
+import { createLoadingProgress } from "./loader";
+import { createSettingsPanel } from "./settingsPanel";
 
 registerSW({ immediate: true });
+
+const loading = createLoadingProgress();
+await loading.set(2, "Loading settings");
+let settings: Settings = loadSettings();
+let quality = getQuality(settings);
+await loading.set(6, "Detecting hardware");
 
 /* -------------------------------------------------------------------- */
 /*                          Player profile                              */
@@ -102,22 +119,31 @@ function makeFreshProfile(
 /*                              Boot                                    */
 /* -------------------------------------------------------------------- */
 
+await loading.set(10, "Loading hero profile");
 const profile = await bootProfile();
+// Character-creation overlay hides the loading screen; restore it for world build.
+loading.show();
+await loading.set(20, "Forging the realm");
 
 const canvas = document.getElementById("game-canvas") as HTMLCanvasElement;
 const renderer = new THREE.WebGLRenderer({
   canvas,
-  antialias: true,
+  antialias: quality.antialias,
   powerPreference: "high-performance",
 });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+applyRendererSettings(renderer, quality);
 
-const world = createWorld();
+const world = createWorld({
+  treeCount: quality.treeCount,
+  rockCount: quality.rockCount,
+  groundNoiseParticles: quality.groundNoiseParticles,
+});
 const scene = world.scene;
+applySceneFog(scene, quality);
+applyLightShadows(world.sun, quality);
+await loading.set(45, "Carving cities and castle");
 
 const camera = new THREE.PerspectiveCamera(
   55,
@@ -176,7 +202,7 @@ const enemies: Entity[] = [];
 function spawnMobsForBiome(biomeId: keyof typeof BIOMES) {
   const biome = BIOMES[biomeId];
   for (const mobId of biome.mobs) {
-    const count = 8;
+    const count = quality.mobsPerBiome;
     for (let i = 0; i < count; i++) {
       const ang = Math.random() * Math.PI * 2;
       const r = Math.random() * (biome.radius - 8);
@@ -191,12 +217,13 @@ function spawnMobsForBiome(biomeId: keyof typeof BIOMES) {
 for (const id of Object.keys(BIOMES) as (keyof typeof BIOMES)[]) {
   spawnMobsForBiome(id);
 }
+await loading.set(60, "Summoning monsters");
 
 /* -------------------------------------------------------------------- */
 /*                              Bot players                             */
 /* -------------------------------------------------------------------- */
 
-const botDefs = generateBots(7331);
+const botDefs = generateBots(7331).slice(0, quality.botCount);
 const bots: { entity: Entity; def: (typeof botDefs)[number]; nextWanderAt: number }[] = [];
 for (const def of botDefs) {
   const city = CITIES[def.homeCity];
@@ -210,6 +237,7 @@ for (const def of botDefs) {
   const e = createBotPlayer(scene, pos, def.color, def.name, def.level);
   bots.push({ entity: e, def, nextWanderAt: 0 });
 }
+await loading.set(75, "Bringing players online");
 
 /* -------------------------------------------------------------------- */
 /*                              NPCs                                    */
@@ -267,6 +295,24 @@ const panels = createPanels(profile, {
   log: (m, k) => hud.log(m, k),
   refresh: () => {
     hud.updatePlayerStats(player, xpState.xp, xpState.toNext);
+  },
+});
+
+const settingsPanel = createSettingsPanel(settings, {
+  log: (m, k) => hud.log(m, k),
+  onApply(next, requiresReload) {
+    settings = next;
+    quality = getQuality(next);
+    saveSettings(next);
+    if (requiresReload) {
+      // Reload to rebuild world with new density/shadows.
+      setTimeout(() => window.location.reload(), 600);
+      return;
+    }
+    // Live runtime tweaks (no reload needed).
+    applyRendererSettings(renderer, quality);
+    applySceneFog(scene, quality);
+    applyLightShadows(world.sun, quality);
   },
 });
 
@@ -503,6 +549,7 @@ document.querySelectorAll<HTMLButtonElement>("[data-panel]").forEach((btn) => {
     if (id === "inventory") panels.showInventory();
     else if (id === "crafting") panels.showCrafting();
     else if (id === "quests") panels.showQuests();
+    else if (id === "settings") settingsPanel.toggle();
     else if (id === "building") {
       if (profile.level < VILLAGE_UNLOCK_LEVEL) {
         hud.log(`Village builder unlocks at Lv.${VILLAGE_UNLOCK_LEVEL}`, "system");
@@ -718,6 +765,9 @@ window.addEventListener("keydown", (e) => {
     } else {
       hud.log(`Village builder unlocks at Lv.${VILLAGE_UNLOCK_LEVEL}`, "system");
     }
+  } else if (e.key === "s" || e.key === "S") {
+    panels.closeAll();
+    settingsPanel.toggle();
   }
 });
 
@@ -1011,12 +1061,15 @@ function tick() {
   requestAnimationFrame(tick);
 }
 
-function start() {
+async function start() {
+  await loading.set(95, "Preparing your hero");
   hud.show();
-  hud.hideLoading();
+  await loading.set(100, "Ready");
+  await loading.hide();
   hud.log(`Welcome, ${profile.name} the ${RACES[profile.race].name} ${CLASSES[profile.class].name}.`, "system");
   hud.log("Click to move. Click an NPC (gold = merchant, blue = quest, orange = trainer).", "system");
-  hud.log("Hotkeys: I bag · C craft · Q quests · B build · 1-5 skills.", "system");
+  hud.log("Hotkeys: I bag · C craft · Q quests · B build · 1-5 skills · S settings.", "system");
+  hud.log(`Graphics: ${quality.name.toUpperCase()} (auto-detected). Press S to change.`, "system");
   // Auto-grant quests at level zero list.
   void QUESTS;
   // Apply equipment bonuses to player stats once.
@@ -1041,4 +1094,4 @@ camera.lookAt(player.position);
 // Ensure obstacles ignore non-collidable areas.
 void isInsideObstacle;
 
-start();
+void start();

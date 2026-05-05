@@ -5,6 +5,12 @@ import type { CityDef } from "./types";
 
 export const WORLD_SIZE = 800;
 
+export interface WorldDensityOpts {
+  treeCount?: number;
+  rockCount?: number;
+  groundNoiseParticles?: number;
+}
+
 export interface World {
   scene: THREE.Scene;
   ground: THREE.Mesh;
@@ -15,7 +21,7 @@ export interface World {
   castleMarker: { id: string; group: THREE.Group; pos: THREE.Vector3 } | null;
 }
 
-function makeGroundTexture(): THREE.Texture {
+function makeGroundTexture(noiseParticles = 14000): THREE.Texture {
   const size = 1024;
   const canvas = document.createElement("canvas");
   canvas.width = size;
@@ -43,7 +49,7 @@ function makeGroundTexture(): THREE.Texture {
     ctx.fill();
   }
 
-  for (let i = 0; i < 14000; i++) {
+  for (let i = 0; i < noiseParticles; i++) {
     const x = Math.random() * size;
     const y = Math.random() * size;
     const r = Math.random() * 1.4 + 0.3;
@@ -282,7 +288,10 @@ function buildCastle(): THREE.Group {
   return group;
 }
 
-export function createWorld(): World {
+export function createWorld(opts: WorldDensityOpts = {}): World {
+  const treeCount = opts.treeCount ?? 240;
+  const rockCount = opts.rockCount ?? 180;
+  const groundNoiseParticles = opts.groundNoiseParticles ?? 14000;
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x4a6f9c);
   scene.fog = new THREE.Fog(0x4a6f9c, 80, 380);
@@ -307,7 +316,7 @@ export function createWorld(): World {
   groundGeo.computeVertexNormals();
 
   const groundMat = new THREE.MeshLambertMaterial({
-    map: makeGroundTexture(),
+    map: makeGroundTexture(groundNoiseParticles),
   });
   const ground = new THREE.Mesh(groundGeo, groundMat);
   ground.rotation.x = -Math.PI / 2;
@@ -403,7 +412,7 @@ export function createWorld(): World {
   const half = WORLD_SIZE / 2 - 5;
   const rng = mulberry32(1337);
 
-  for (let i = 0; i < 240; i++) {
+  for (let i = 0; i < treeCount; i++) {
     const x = (rng() * 2 - 1) * half;
     const z = (rng() * 2 - 1) * half;
     const biome = biomeAt(x, z);
@@ -429,7 +438,7 @@ export function createWorld(): World {
     obstacleBoxes.push(box);
   }
 
-  for (let i = 0; i < 180; i++) {
+  for (let i = 0; i < rockCount; i++) {
     const x = (rng() * 2 - 1) * half;
     const z = (rng() * 2 - 1) * half;
     const biome = biomeAt(x, z);

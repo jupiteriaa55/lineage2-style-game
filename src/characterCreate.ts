@@ -12,6 +12,10 @@ export function showCharacterCreate(
   initial?: Partial<Selection>,
 ): Promise<Selection> {
   return new Promise((resolve) => {
+    // Hide the boot loading screen so the create UI is visible.
+    const ls = document.getElementById("loading-screen");
+    if (ls) ls.style.display = "none";
+
     const overlay = document.createElement("div");
     overlay.className = "create-overlay";
 

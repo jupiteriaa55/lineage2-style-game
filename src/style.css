@@ -81,13 +81,57 @@ body {
 }
 
 #loading-screen .spinner {
-  margin-top: 36px;
-  width: 48px;
-  height: 48px;
+  margin-top: 28px;
+  width: 32px;
+  height: 32px;
   border: 3px solid rgba(212, 183, 106, 0.2);
   border-top-color: var(--gold-bright);
   border-radius: 50%;
   animation: spin 1s linear infinite;
+}
+
+#loading-screen .loader-bar {
+  margin-top: 36px;
+  width: min(540px, 80vw);
+  height: 14px;
+  background: rgba(212, 183, 106, 0.08);
+  border: 1px solid rgba(212, 183, 106, 0.35);
+  border-radius: 7px;
+  overflow: hidden;
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.6);
+}
+
+#loading-screen .loader-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(
+    90deg,
+    #4a3a18 0%,
+    #d4b76a 50%,
+    #ffe9a8 100%
+  );
+  box-shadow: 0 0 10px rgba(245, 217, 122, 0.65);
+  transition: width 0.25s ease;
+}
+
+#loading-screen .loader-row {
+  margin-top: 10px;
+  width: min(540px, 80vw);
+  display: flex;
+  justify-content: space-between;
+  font-family: 'Cinzel', serif;
+  font-size: 12px;
+  color: #d4b76a;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+#loading-screen .loader-phase {
+  color: #efe6c8;
+}
+#loading-screen .loader-percent {
+  color: #ffd76a;
+  font-weight: 700;
 }
 
 @keyframes spin {
@@ -507,15 +551,18 @@ body {
 /* ---------- Castle banner ---------- */
 .castle-banner {
   margin-left: auto;
+  margin-right: 64px; /* keep clear of vertical side-buttons strip */
   background: linear-gradient(180deg, #4a3526, #1f140a);
   border: 1px solid #856236;
   border-radius: 6px;
-  padding: 6px 10px;
+  padding: 6px 12px;
   color: #f5e6c1;
   display: flex;
   flex-direction: column;
   font-size: 11px;
-  min-width: 150px;
+  min-width: 200px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .castle-banner .cb-title {
   font-family: 'Cinzel', serif;
@@ -857,12 +904,127 @@ body {
   font-style: italic;
 }
 
+/* ---------- Settings panel ---------- */
+.settings-panel {
+  width: min(560px, 92vw);
+  max-height: 80vh;
+}
+.settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 12px 16px 16px;
+}
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.settings-section h3 {
+  margin: 0;
+  font-family: 'Cinzel', serif;
+  letter-spacing: 0.12em;
+  color: #ffd76a;
+  font-size: 14px;
+}
+.settings-hint {
+  margin: 0;
+  color: #c8b58a;
+  font-size: 12px;
+}
+.preset-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.preset-row {
+  text-align: left;
+  background: linear-gradient(180deg, #1f1810, #0e0a06);
+  border: 1px solid #5a4527;
+  color: #efe6c8;
+  border-radius: 6px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font: inherit;
+  transition: border-color 0.15s, background 0.15s;
+}
+.preset-row:hover {
+  border-color: #d4b76a;
+}
+.preset-row.active {
+  border-color: #ffd76a;
+  background: linear-gradient(180deg, #2c2010, #1a1208);
+  box-shadow: inset 0 0 12px rgba(212, 183, 106, 0.2);
+}
+.preset-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.preset-name {
+  font-family: 'Cinzel', serif;
+  letter-spacing: 0.18em;
+  color: #ffd76a;
+  font-size: 13px;
+}
+.preset-meta {
+  color: #c0a568;
+  font-size: 11px;
+}
+.preset-desc {
+  margin-top: 4px;
+  color: #b8a878;
+  font-size: 11px;
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #efe6c8;
+  font-size: 13px;
+  cursor: pointer;
+}
+.settings-warn {
+  min-height: 16px;
+  font-size: 12px;
+  color: #ffaa66;
+}
+.settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.settings-apply {
+  background: linear-gradient(180deg, #4a3a18, #2a2010);
+  border: 1px solid #846332;
+  color: #ffd76a;
+  padding: 8px 18px;
+  border-radius: 6px;
+  font-family: 'Cinzel', serif;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  font-size: 13px;
+}
+.settings-apply:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.settings-apply:not(:disabled):hover {
+  border-color: #ffd76a;
+}
+
 /* ---------- Character creation ---------- */
 .create-overlay {
   position: fixed;
   inset: 0;
   background: radial-gradient(circle at center, #1a1010 0%, #050202 70%);
-  z-index: 50;
+  z-index: 2000;
   display: flex;
   align-items: center;
   justify-content: center;

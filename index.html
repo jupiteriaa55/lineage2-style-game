@@ -14,7 +14,14 @@
   <body>
     <div id="loading-screen">
       <div class="logo">CHRONICLES OF DEVIL GODS</div>
-      <div class="subtitle">Forging the realm...</div>
+      <div class="subtitle" id="loading-subtitle">Forging the realm...</div>
+      <div class="loader-bar">
+        <div class="loader-bar-fill" id="loading-bar-fill"></div>
+      </div>
+      <div class="loader-row">
+        <span class="loader-phase" id="loading-phase">Booting</span>
+        <span class="loader-percent" id="loading-percent">0%</span>
+      </div>
       <div class="spinner"></div>
     </div>
     <canvas id="game-canvas"></canvas>
@@ -73,6 +80,7 @@
         <button data-panel="crafting" class="side-btn" title="Crafting (C)">⚒</button>
         <button data-panel="quests" class="side-btn" title="Quests (Q)">❒</button>
         <button data-panel="building" class="side-btn" title="Build Village (B)">⌂</button>
+        <button data-panel="settings" class="side-btn" title="Settings (S)">⚙</button>
       </div>
 
       <div id="bottom-bar">

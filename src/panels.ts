@@ -11,6 +11,8 @@ import { canCraft, performCraft, RECIPE_LIST } from "./crafting";
 import { LOOTBOXES, openLootbox } from "./lootbox";
 import { BUILDING_LIST, BUILDINGS } from "./buildings";
 import { QUEST_LIST, getQuest } from "./quests";
+import { getNPC } from "./npcs";
+import { getCity } from "./cities";
 import type {
   BuildingKind,
   EquipSlot,
@@ -278,7 +280,7 @@ export function createPanels(
       row.innerHTML = `
         <div class="quest-name">${def.name}</div>
         <div class="quest-desc">${def.description}</div>
-        <div class="quest-obj">Lv.${def.levelReq} · Talk to ${def.giver.split(".").slice(-1)[0]} in ${def.city.replace("city.", "")}</div>
+        <div class="quest-obj">Lv.${def.levelReq} · Talk to ${getNPC(def.giver)?.name ?? def.giver} in ${getCity(def.city)?.name ?? def.city}</div>
         <button class="quest-accept">Accept</button>
       `;
       const btn = row.querySelector(".quest-accept") as HTMLButtonElement;
